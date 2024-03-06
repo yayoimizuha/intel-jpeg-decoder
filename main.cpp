@@ -12,7 +12,7 @@ mfxStatus state;
 #define CHECK(x) if((state = x) != MFX_ERR_NONE){cout << "error in " << __LINE__ <<" by "<< state << endl;exit(-1);}
 #define BITSTREAM_BUFFER_SIZE 2000000;
 
-const char *PATH = R"(C:\Users\tomokazu\CLionProjects\oneAPI_test\jpeg420exif.jpg)";
+const char *PATH = R"(C:\Users\tomokazu\friends-4385686.jpg)";
 
 int main() {
     auto loader = MFXLoad();
@@ -86,12 +86,16 @@ int main() {
     bitstream.Data = static_cast<mfxU8 *>(calloc(bitstream.MaxLength, sizeof(mfxU8)));
     bitstream.CodecId = MFX_CODEC_JPEG;
     auto input_file = fopen(PATH, "rb");
+    if (input_file == nullptr) {
+        cout << "fail to open file" << endl;
+        exit(-1);
+    }
     bitstream.DataLength += fread(bitstream.Data + bitstream.DataLength, 1, bitstream.MaxLength - bitstream.DataLength,
                                   input_file);
 
     mfxVideoParam decodeParams = {};
     decodeParams.mfx.CodecId = MFX_CODEC_JPEG;
-    decodeParams.IOPattern = MFX_IOPATTERN_OUT_SYSTEM_MEMORY;
+    decodeParams.IOPattern = MFX_IOPATTERN_OUT_VIDEO_MEMORY;
 //    decodeParams.mfx.JPEGColorFormat = MFX_JPEG_COLORFORMAT_RGB;
 //    decodeParams.mfx.JPEGChromaFormat = MFX_CHROMAFORMAT_YUV444;
 
