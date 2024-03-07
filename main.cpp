@@ -41,7 +41,7 @@ int main() {
                 cout << "Device ID: " << implDesc->Dev.DeviceID << endl;
                 cout << "Vendor ID: " << implDesc->Impl << endl;
 
-//                cout <<  << endl;１QSくださいあ
+//                cout <<  << endl;
                 MFXCreateSession(loader, i, &session);
                 mfxIMPL impl;
                 if (MFXQueryIMPL(session, &impl) == MFX_ERR_NONE) {

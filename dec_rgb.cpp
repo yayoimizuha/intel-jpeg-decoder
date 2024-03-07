@@ -13,7 +13,7 @@ mfxStatus state;
 #define CHECK(x) if((state = x) != MFX_ERR_NONE){cout << "error in " << __LINE__ <<" by "<< state << endl;exit(-1);}
 #define BITSTREAM_BUFFER_SIZE 2000000;
 #define ALIGN16(value) (((value + 15) >> 4) << 4)
-const char *PATH = R"(C:\Users\tomokazu\CLionProjects\oneAPI_test\jpeg420exif.jpg)";
+const char *PATH = R"(C:\Users\tomokazu\friends-4385686.jpg)";
 
 int main() {
     auto loader = MFXLoad();
@@ -42,7 +42,7 @@ int main() {
                 cout << "Device ID: " << implDesc->Dev.DeviceID << endl;
                 cout << "Vendor ID: " << implDesc->Impl << endl;
 
-//                cout <<  << endl;１QSくださいあ
+//                cout <<  << endl;
                 MFXCreateSession(loader, i, &session);
                 mfxIMPL impl;
                 if (MFXQueryIMPL(session, &impl) == MFX_ERR_NONE) {
@@ -73,11 +73,11 @@ int main() {
     mfxHDL hdl;
     MFXEnumImplementations(loader, impl_idx, mfxImplCapsDeliveryFormat::MFX_IMPLCAPS_IMPLEMENTEDFUNCTIONS, &hdl);
     auto *implementedFunctions = static_cast<mfxImplementedFunctions *>(hdl);
-    std::for_each(implementedFunctions->FunctionsName,
-                  implementedFunctions->FunctionsName + implementedFunctions->NumFunctions,
-                  [](mfxChar *functionName) {
-                      cout << "implemented: " << functionName << endl;
-                  });
+//    std::for_each(implementedFunctions->FunctionsName,
+//                  implementedFunctions->FunctionsName + implementedFunctions->NumFunctions,
+//                  [](mfxChar *functionName) {
+//                      cout << "implemented: " << functionName << endl;
+//                  });
     MFXDispReleaseImplDescription(loader, hdl);
 
     mfxBitstream bitstream = {};
@@ -106,9 +106,9 @@ int main() {
 
     CHECK(MFXVideoDECODE_DecodeHeader(session, &bitstream, &decodeParams))
 //    CHECK(MFXVideoDECODE_VPP_DecodeHeader(session, &bitstream, &decodeVPPParams))
-    auto channelParam = new mfxVideoChannelParam[0];
+    auto *channelParam = static_cast<mfxVideoChannelParam *>(malloc(sizeof(mfxVideoChannelParam)));
     memset(channelParam, 0, sizeof(mfxVideoChannelParam));
-    channelParam->VPP.FourCC = MFX_FOURCC_RGBP;
+    channelParam->VPP.FourCC = MFX_FOURCC_RGB4;
     channelParam->VPP.ChromaFormat = MFX_CHROMAFORMAT_YUV420;
     channelParam->VPP.PicStruct = MFX_PICSTRUCT_PROGRESSIVE;
     channelParam->VPP.FrameRateExtN = decodeParams.mfx.FrameInfo.FrameRateExtN;
@@ -142,22 +142,32 @@ int main() {
     auto aSurf = surface_out->Surfaces[1];
     CHECK(aSurf->FrameInterface->Synchronize(aSurf, 1000))
     CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ))
-    auto h = aSurf->Info.CropH;
-    auto w = aSurf->Info.CropW;
+    auto *info = &aSurf->Info;
+    auto *data = &aSurf->Data;
+    auto pitch = data->Pitch;
+    auto h = info->CropH;
+    auto w = info->CropW;
+    cout << "pitch :" << pitch << endl;
+    cout << w << "x" << h << endl;
 
-    fourcc = aSurf->Info.FourCC;
+    fourcc = info->FourCC;
     fourcc_str = ""s + (char) (fourcc & mask) + (char) ((fourcc & mask << 8) >> 8) +
                  (char) ((fourcc & mask << 16) >> 16) + (char) ((fourcc & mask << 24) >> 24);
     cout << "image format name: " << fourcc_str << endl;
-    auto out = fopen("out.raw", "wb");
+    auto out = fopen("rgb.raw", "wb");
     for (int i = 0; i < h; ++i) {
-        fwrite(&aSurf->Data.R[i * aSurf->Data.Pitch], 1, w, out);
+        if (i == 0) {
+            for (int j = 0; j < 10; ++j) {
+                cout << (int) (data->B + i * pitch)[j] << endl;
+            }
+        }
+//        fwrite(&aSurf->Data.R[i * aSurf->Data.Pitch], 1, w, out);
     }
     for (int i = 0; i < h; ++i) {
-        fwrite(&aSurf->Data.G[i * aSurf->Data.Pitch], 1, w, out);
+//        fwrite(&aSurf->Data.G[i * aSurf->Data.Pitch], 1, w, out);
     }
     for (int i = 0; i < h; ++i) {
-        fwrite(&aSurf->Data.B[i * aSurf->Data.Pitch], 1, w, out);
+        fwrite(data->B + i * pitch, 1, pitch, out);
     }
 }
 
