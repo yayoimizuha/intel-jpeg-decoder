@@ -4,9 +4,11 @@ project(oneAPI_test)
 set(CMAKE_CXX_STANDARD 20)
 
 add_executable(JPEG_DECODER main.cpp)
+add_executable(JPEG_DECODER_RGB dec_rgb.cpp)
 add_executable(example hello-decode.cpp)
 
 target_link_libraries(JPEG_DECODER vpl)
+target_link_libraries(JPEG_DECODER_RGB vpl)
 target_link_libraries(example vpl)
 #include(cmake/CPM.cmake)
 #
