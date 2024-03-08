@@ -137,10 +137,12 @@ int main() {
     mfxSurfaceArray *surface_out;
     mfxSyncPoint syncPoint;
 
+    auto start = clock();
     CHECK(MFXVideoDECODE_VPP_DecodeFrameAsync(session, &bitstream, nullptr, 0, &surface_out))
-    surface_out->Surfaces[0]->FrameInterface->Synchronize(surface_out->Surfaces[0], 1000);
+    CHECK(surface_out->Surfaces[0]->FrameInterface->Synchronize(surface_out->Surfaces[0], 1000))
     auto aSurf = surface_out->Surfaces[1];
     CHECK(aSurf->FrameInterface->Synchronize(aSurf, 1000))
+    cout << (clock() - start) / (CLOCKS_PER_SEC / 1000) << "ms" << endl;
     CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ))
     auto *info = &aSurf->Info;
     auto *data = &aSurf->Data;
