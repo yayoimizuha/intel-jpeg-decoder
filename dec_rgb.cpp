@@ -6,6 +6,7 @@
 #include <fstream>
 #include <vector>
 #include <cstring>
+#include "BitmapPlusPlus.hpp"
 
 using namespace std;
 
@@ -168,9 +169,19 @@ int main() {
     for (int i = 0; i < h; ++i) {
 //        fwrite(&aSurf->Data.G[i * aSurf->Data.Pitch], 1, w, out);
     }
+    bmp::Bitmap img(w, h);
     for (int i = 0; i < h; ++i) {
         fwrite(data->B + i * pitch, 1, pitch, out);
+        for (int j = 0; j < w; ++j) {
+            bmp::Pixel pixel;
+            pixel.r = *(data->R + (i * pitch) * 4 + j);
+            pixel.g = *(data->G + (i * pitch) * 4 + j + 1);
+            pixel.b = *(data->B + (i * pitch) * 4 + j + 2);
+            img.set(j, i, pixel);
+        }
+
     }
+    img.save("rgb.bmp");
 }
 
 
