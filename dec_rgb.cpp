@@ -1,17 +1,131 @@
 #include <iostream>
 #include <vpl/mfx.h>
-#include <vpl/mfxjpeg.h>
-#include <vpl/mfxvideo++.h>
+//#include <vpl/mfxjpeg.h>
+//#include <vpl/mfxvideo++.h>
 #include <algorithm>
-#include <fstream>
-#include <vector>
 #include <cstring>
 #include "BitmapPlusPlus.hpp"
-
+#include <d3d11.h>
+//#include <sycl/CL/cl_d3d11.h>
 using namespace std;
 
-mfxStatus state;
-#define CHECK(x) if((state = x) != MFX_ERR_NONE){cout << "error in " << __LINE__ <<" by "<< state << endl;exit(-1);}
+
+void check(mfxStatus x, int LINE) {
+    switch (x) {
+        case MFX_ERR_NONE:
+            return;
+        case MFX_ERR_UNKNOWN:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_UNKNOWN" << endl;
+            break;
+        case MFX_ERR_NULL_PTR:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_NULL_PTR" << endl;
+            break;
+        case MFX_ERR_UNSUPPORTED:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_UNSUPPORTED" << endl;
+            break;
+        case MFX_ERR_MEMORY_ALLOC:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_MEMORY_ALLOC" << endl;
+            break;
+        case MFX_ERR_NOT_ENOUGH_BUFFER:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_NOT_ENOUGH_BUFFER" << endl;
+            break;
+        case MFX_ERR_INVALID_HANDLE:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_INVALID_HANDLE" << endl;
+            break;
+        case MFX_ERR_LOCK_MEMORY:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_LOCK_MEMORY" << endl;
+            break;
+        case MFX_ERR_NOT_INITIALIZED:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_NOT_INITIALIZED" << endl;
+            break;
+        case MFX_ERR_NOT_FOUND:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_NOT_FOUND" << endl;
+            break;
+        case MFX_ERR_MORE_DATA:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_MORE_DATA" << endl;
+            break;
+        case MFX_ERR_MORE_SURFACE:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_MORE_SURFACE" << endl;
+            break;
+        case MFX_ERR_ABORTED:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_ABORTED" << endl;
+            break;
+        case MFX_ERR_DEVICE_LOST:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_DEVICE_LOST" << endl;
+            break;
+        case MFX_ERR_INCOMPATIBLE_VIDEO_PARAM:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_INCOMPATIBLE_VIDEO_PARAM" << endl;
+            break;
+        case MFX_ERR_INVALID_VIDEO_PARAM:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_INVALID_VIDEO_PARAM" << endl;
+            break;
+        case MFX_ERR_UNDEFINED_BEHAVIOR:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_UNDEFINED_BEHAVIOR" << endl;
+            break;
+        case MFX_ERR_DEVICE_FAILED:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_DEVICE_FAILED" << endl;
+            break;
+        case MFX_ERR_MORE_BITSTREAM:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_MORE_BITSTREAM" << endl;
+            break;
+        case MFX_ERR_GPU_HANG:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_GPU_HANG" << endl;
+            break;
+        case MFX_ERR_REALLOC_SURFACE:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_REALLOC_SURFACE" << endl;
+            break;
+        case MFX_ERR_RESOURCE_MAPPED:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_RESOURCE_MAPPED" << endl;
+            break;
+        case MFX_ERR_NOT_IMPLEMENTED:
+            cerr << "error in " << LINE << " by " << "MFX_ERR_NOT_IMPLEMENTED" << endl;
+            break;
+        case MFX_WRN_IN_EXECUTION:
+            cerr << "warn in " << LINE << " by " << "MFX_WRN_IN_EXECUTION" << endl;
+            break;
+        case MFX_WRN_DEVICE_BUSY:
+            cerr << "warn in " << LINE << " by " << "MFX_WRN_DEVICE_BUSY" << endl;
+            break;
+        case MFX_WRN_VIDEO_PARAM_CHANGED:
+            cerr << "warn in " << LINE << " by " << "MFX_WRN_VIDEO_PARAM_CHANGED" << endl;
+            break;
+        case MFX_WRN_PARTIAL_ACCELERATION:
+            cerr << "warn in " << LINE << " by " << "MFX_WRN_PARTIAL_ACCELERATION" << endl;
+            break;
+        case MFX_WRN_INCOMPATIBLE_VIDEO_PARAM:
+            cerr << "warn in " << LINE << " by " << "MFX_WRN_INCOMPATIBLE_VIDEO_PARAM" << endl;
+            break;
+        case MFX_WRN_VALUE_NOT_CHANGED:
+            cerr << "warn in " << LINE << " by " << "MFX_WRN_VALUE_NOT_CHANGED" << endl;
+            break;
+        case MFX_WRN_OUT_OF_RANGE:
+            cerr << "warn in " << LINE << " by " << "MFX_WRN_OUT_OF_RANGE" << endl;
+            break;
+        case MFX_WRN_FILTER_SKIPPED:
+            cerr << "warn in " << LINE << " by " << "MFX_WRN_FILTER_SKIPPED" << endl;
+            break;
+        case MFX_ERR_NONE_PARTIAL_OUTPUT:
+            cerr << "warn in " << LINE << " by " << "MFX_ERR_NONE_PARTIAL_OUTPUT" << endl;
+            break;
+        case MFX_WRN_ALLOC_TIMEOUT_EXPIRED:
+            cerr << "warn in " << LINE << " by " << "MFX_WRN_ALLOC_TIMEOUT_EXPIRED" << endl;
+            break;
+        case MFX_TASK_WORKING:
+            cerr << "warn in " << LINE << " by " << "MFX_TASK_WORKING" << endl;
+            break;
+        case MFX_TASK_BUSY:
+            cerr << "warn in " << LINE << " by " << "MFX_TASK_BUSY" << endl;
+            break;
+        case MFX_ERR_MORE_DATA_SUBMIT_TASK:
+            cerr << "warn in " << LINE << " by " << "MFX_ERR_MORE_DATA_SUBMIT_TASK" << endl;
+            break;
+    }
+    if (x < 0) {
+        exit(x);
+    }
+}
+
+#define CHECK(x) check(x,__LINE__)
 #define BITSTREAM_BUFFER_SIZE 2000000;
 #define ALIGN16(value) (((value + 15) >> 4) << 4)
 const char *PATH = R"(C:\Users\tomokazu\friends-4385686.jpg)";
@@ -21,12 +135,22 @@ int main() {
     auto cfg = MFXCreateConfig(loader);
     mfxVariant variant;
     variant.Type = MFX_VARIANT_TYPE_U32;
-    variant.Data.U32 = MFX_IMPL_HARDWARE;
-    MFXSetConfigFilterProperty(cfg, reinterpret_cast<const mfxU8 *>("mfxImplDescription.Impl"), variant);
+    variant.Data.U32 = MFX_IMPL_TYPE_HARDWARE;
+    CHECK(MFXSetConfigFilterProperty(cfg, reinterpret_cast<const mfxU8 *>("mfxImplDescription.Impl"), variant));
+    variant.Type = MFX_VARIANT_TYPE_U32;
+#ifdef WIN32
+    variant.Data.U32 = MFX_ACCEL_MODE_VIA_D3D11;
+#elifdef __linux__
+    variant.Data.U32 = MFX_ACCEL_MODE_VIA_VAAPI;
+#elifndef
+    variant.Data.U32 = MFX_ACCEL_MODE_NA;
+#endif
+    CHECK(MFXSetConfigFilterProperty(cfg, reinterpret_cast<const mfxU8 *>("mfxImplDescription.AccelerationMode"),
+                                     variant));
     variant.Data.U32 = MFX_CODEC_JPEG;
-    MFXSetConfigFilterProperty(cfg,
-                               reinterpret_cast<const mfxU8 *>("mfxImplDescription.mfxDecoderDescription.decoder.CodecID"),
-                               variant);
+    CHECK(MFXSetConfigFilterProperty(cfg,
+                                     reinterpret_cast<const mfxU8 *>("mfxImplDescription.mfxDecoderDescription.decoder.CodecID"),
+                                     variant));
     mfxStatus iter;
     mfxImplDescription *implDesc;
     mfxSession session;
@@ -48,17 +172,11 @@ int main() {
                 mfxIMPL impl;
                 if (MFXQueryIMPL(session, &impl) == MFX_ERR_NONE) {
                     switch (impl & 0x0f00) {
-                        case MFX_IMPL_VIA_D3D9:
-                            cout << "Impl: MFX_IMPL_VIA_D3D9" << endl;
-                            break;
                         case MFX_IMPL_VIA_D3D11:
                             cout << "Impl: MFX_IMPL_VIA_D3D11" << endl;
                             break;
                         case MFX_IMPL_VIA_VAAPI:
                             cout << "Impl: MFX_IMPL_VIA_VAAPI" << endl;
-                            break;
-                        case MFX_IMPL_VIA_HDDLUNITE:
-                            cout << "Impl: MFX_IMPL_VIA_HDDLUNITE" << endl;
                             break;
                         default:
                             cout << "Impl: MFX_IMPL_UNSUPPORTED" << endl;
@@ -69,11 +187,14 @@ int main() {
                 MFXDispReleaseImplDescription(loader, implDesc);
         }
     }
-    if (impl_idx == -1)return 1;
+    if (impl_idx == -1) {
+        cerr << "Cannot found suitable device." << endl;
+        CHECK(MFX_ERR_NOT_FOUND);
+    }
 
     mfxHDL hdl;
     MFXEnumImplementations(loader, impl_idx, mfxImplCapsDeliveryFormat::MFX_IMPLCAPS_IMPLEMENTEDFUNCTIONS, &hdl);
-    auto *implementedFunctions = static_cast<mfxImplementedFunctions *>(hdl);
+//    auto *implementedFunctions = static_cast<mfxImplementedFunctions *>(hdl);
 //    std::for_each(implementedFunctions->FunctionsName,
 //                  implementedFunctions->FunctionsName + implementedFunctions->NumFunctions,
 //                  [](mfxChar *functionName) {
@@ -98,14 +219,14 @@ int main() {
     mfxVideoParam decodeParams = {};
     mfxVideoParam decodeVPPParams = {};
     decodeParams.mfx.CodecId = MFX_CODEC_JPEG;
-    decodeParams.IOPattern = MFX_IOPATTERN_OUT_SYSTEM_MEMORY;
+    decodeParams.IOPattern = MFX_IOPATTERN_OUT_VIDEO_MEMORY;
 //    decodeParams.mfx.JPEGColorFormat = MFX_JPEG_COLORFORMAT_RGB;
 //    decodeParams.mfx.JPEGChromaFormat = MFX_CHROMAFORMAT_YUV444;
 
 //    decodeVPPParams.mfx.CodecId = MFX_CODEC_JPEG;
 //    decodeVPPParams.IOPattern = MFX_IOPATTERN_OUT_VIDEO_MEMORY;
 
-    CHECK(MFXVideoDECODE_DecodeHeader(session, &bitstream, &decodeParams))
+    CHECK(MFXVideoDECODE_DecodeHeader(session, &bitstream, &decodeParams));
 //    CHECK(MFXVideoDECODE_VPP_DecodeHeader(session, &bitstream, &decodeVPPParams))
     auto *channelParam = static_cast<mfxVideoChannelParam *>(malloc(sizeof(mfxVideoChannelParam)));
     memset(channelParam, 0, sizeof(mfxVideoChannelParam));
@@ -120,12 +241,12 @@ int main() {
     channelParam->VPP.Height = ALIGN16(channelParam->VPP.CropH);
     channelParam->VPP.ChannelId = 1;
     channelParam->Protected = 0;
-    channelParam->IOPattern = MFX_IOPATTERN_IN_SYSTEM_MEMORY | MFX_IOPATTERN_OUT_SYSTEM_MEMORY;
+    channelParam->IOPattern = MFX_IOPATTERN_IN_VIDEO_MEMORY | MFX_IOPATTERN_OUT_VIDEO_MEMORY;
     channelParam->ExtParam = nullptr;
     channelParam->NumExtParam = 0;
 
 
-    CHECK(MFXVideoDECODE_VPP_Init(session, &decodeParams, &channelParam, 1))
+    CHECK(MFXVideoDECODE_VPP_Init(session, &decodeParams, &channelParam, 1));
 
 //    CHECK(MFXVideoDECODE_Init(session, &decodeParams))
 
@@ -136,15 +257,50 @@ int main() {
     cout << "image format name: " << fourcc_str << endl;
     if (fourcc != MFX_FOURCC_NV12)exit(-1);
     mfxSurfaceArray *surface_out;
-    mfxSyncPoint syncPoint;
+//    mfxSyncPoint syncPoint;
 
     auto start = clock();
-    CHECK(MFXVideoDECODE_VPP_DecodeFrameAsync(session, &bitstream, nullptr, 0, &surface_out))
-    CHECK(surface_out->Surfaces[0]->FrameInterface->Synchronize(surface_out->Surfaces[0], 1000))
+    CHECK(MFXVideoDECODE_VPP_DecodeFrameAsync(session, &bitstream, nullptr, 0, &surface_out));
+
+    CHECK(surface_out->Surfaces[0]->FrameInterface->Synchronize(surface_out->Surfaces[0], 1000));
+    CHECK(surface_out->Surfaces[0]->FrameInterface->Release(surface_out->Surfaces[0]));
     auto aSurf = surface_out->Surfaces[1];
-    CHECK(aSurf->FrameInterface->Synchronize(aSurf, 1000))
-    cout << (clock() - start) / (CLOCKS_PER_SEC / 1000) << "ms" << endl;
-    CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ))
+    mfxHDL handle = nullptr;
+    mfxResourceType resourceType;
+    CHECK(aSurf->FrameInterface->GetNativeHandle(aSurf, &handle, &resourceType));
+    auto *texture = static_cast<ID3D11Texture2D *>(handle);
+    cout << "Resource type: ";
+    switch (resourceType) {
+        case MFX_RESOURCE_SYSTEM_SURFACE:
+            cout << "MFX_RESOURCE_SYSTEM_SURFACE";
+            break;
+        case MFX_RESOURCE_VA_SURFACE_PTR:
+            cout << "MFX_RESOURCE_VA_SURFACE_PTR";
+            break;
+        case MFX_RESOURCE_VA_BUFFER_PTR:
+            cout << "MFX_RESOURCE_VA_BUFFER_PTR";
+            break;
+        case MFX_RESOURCE_DX9_SURFACE:
+            cout << "MFX_RESOURCE_DX9_SURFACE";
+            break;
+        case MFX_RESOURCE_DX11_TEXTURE:
+            cout << "MFX_RESOURCE_DX11_TEXTURE";
+            break;
+        case MFX_RESOURCE_DX12_RESOURCE:
+            cout << "MFX_RESOURCE_DX12_RESOURCE";
+            break;
+        case MFX_RESOURCE_DMA_RESOURCE:
+            cout << "MFX_RESOURCE_DMA_RESOURCE";
+            break;
+        case MFX_RESOURCE_HDDLUNITE_REMOTE_MEMORY:
+            cout << "MFX_RESOURCE_HDDLUNITE_REMOTE_MEMORY";
+            break;
+    }
+    cout << endl;
+    cout << handle << endl;
+    CHECK(aSurf->FrameInterface->Synchronize(aSurf, 1000));
+    cout << (clock() - start) << "ms" << endl;
+    CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ));
     auto *info = &aSurf->Info;
     auto *data = &aSurf->Data;
     auto pitch = data->Pitch;
@@ -157,31 +313,20 @@ int main() {
     fourcc_str = ""s + (char) (fourcc & mask) + (char) ((fourcc & mask << 8) >> 8) +
                  (char) ((fourcc & mask << 16) >> 16) + (char) ((fourcc & mask << 24) >> 24);
     cout << "image format name: " << fourcc_str << endl;
-    auto out = fopen("rgb.raw", "wb");
-    for (int i = 0; i < h; ++i) {
-        if (i == 0) {
-            for (int j = 0; j < 10; ++j) {
-                cout << (int) (data->B + i * pitch)[j] << endl;
-            }
-        }
-//        fwrite(&aSurf->Data.R[i * aSurf->Data.Pitch], 1, w, out);
-    }
-    for (int i = 0; i < h; ++i) {
-//        fwrite(&aSurf->Data.G[i * aSurf->Data.Pitch], 1, w, out);
-    }
     bmp::Bitmap img(w, h);
     for (int i = 0; i < h; ++i) {
-        fwrite(data->B + i * pitch, 1, pitch, out);
         for (int j = 0; j < w; ++j) {
             bmp::Pixel pixel;
-            pixel.r = *(data->R + (i * pitch) * 4 + j);
-            pixel.g = *(data->G + (i * pitch) * 4 + j + 1);
-            pixel.b = *(data->B + (i * pitch) * 4 + j + 2);
+            pixel.r = *(data->R + i * pitch + 4 * j);
+            pixel.g = *(data->G + i * pitch + 4 * j);
+            pixel.b = *(data->B + i * pitch + 4 * j);
             img.set(j, i, pixel);
         }
 
     }
+    aSurf->FrameInterface->Release(aSurf);
     img.save("rgb.bmp");
+    MFXVideoVPP_Close(session);
 }
 
 
