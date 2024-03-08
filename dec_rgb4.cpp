@@ -210,7 +210,7 @@ int main() {
     fopen_s(&input_file, PATH, "rb");
     if (input_file == nullptr) {
         cout << "fail to open file" << endl;
-        exit(ERROR_FILE_NOT_FOUND);
+        exit(-1);
     }
     bitstream.DataLength += fread(bitstream.Data + bitstream.DataLength, 1, bitstream.MaxLength - bitstream.DataLength,
                                   input_file);
@@ -227,47 +227,25 @@ int main() {
 
     CHECK(MFXVideoDECODE_DecodeHeader(session, &bitstream, &decodeParams));
 //    CHECK(MFXVideoDECODE_VPP_DecodeHeader(session, &bitstream, &decodeVPPParams))
-    cout << "size of mfxVideoChannelParam: " << sizeof(mfxVideoChannelParam) << endl;
-    mfxVideoChannelParam **channelParam = nullptr;
-    channelParam = new mfxVideoChannelParam *[2];
-//    *channelParam = static_cast<mfxVideoChannelParam *>(calloc(2, sizeof(mfxVideoChannelParam)));
-    channelParam[0] = new mfxVideoChannelParam;
-    memset(channelParam[0], 0, sizeof(mfxVideoChannelParam));
-    channelParam[1] = new mfxVideoChannelParam;
-    memset(channelParam[1], 0, sizeof(mfxVideoChannelParam));
-    {
-        channelParam[0]->VPP.FourCC = MFX_FOURCC_RGB4;
-        channelParam[0]->VPP.ChromaFormat = decodeParams.mfx.FrameInfo.ChromaFormat;
-        channelParam[0]->VPP.PicStruct = MFX_PICSTRUCT_PROGRESSIVE;
-        channelParam[0]->VPP.FrameRateExtN = decodeParams.mfx.FrameInfo.FrameRateExtN;
-        channelParam[0]->VPP.FrameRateExtD = decodeParams.mfx.FrameInfo.FrameRateExtD;
-        channelParam[0]->VPP.CropW = decodeParams.mfx.FrameInfo.CropW;
-        channelParam[0]->VPP.CropH = decodeParams.mfx.FrameInfo.CropH;
-        channelParam[0]->VPP.Width = ALIGN16(channelParam[0]->VPP.CropW);
-        channelParam[0]->VPP.Height = ALIGN16(channelParam[0]->VPP.CropH);
-        channelParam[0]->VPP.ChannelId = 1;
-        channelParam[0]->Protected = 0;
-        channelParam[0]->IOPattern = MFX_IOPATTERN_IN_VIDEO_MEMORY | MFX_IOPATTERN_OUT_VIDEO_MEMORY;
-        channelParam[0]->ExtParam = nullptr;
-        channelParam[0]->NumExtParam = 0;
+    auto *channelParam = static_cast<mfxVideoChannelParam *>(malloc(sizeof(mfxVideoChannelParam)));
+    memset(channelParam, 0, sizeof(mfxVideoChannelParam));
+    channelParam->VPP.FourCC = MFX_FOURCC_RGB4;
+    channelParam->VPP.ChromaFormat = decodeParams.mfx.FrameInfo.ChromaFormat;
+    channelParam->VPP.PicStruct = MFX_PICSTRUCT_PROGRESSIVE;
+    channelParam->VPP.FrameRateExtN = decodeParams.mfx.FrameInfo.FrameRateExtN;
+    channelParam->VPP.FrameRateExtD = decodeParams.mfx.FrameInfo.FrameRateExtD;
+    channelParam->VPP.CropW = decodeParams.mfx.FrameInfo.CropW;
+    channelParam->VPP.CropH = decodeParams.mfx.FrameInfo.CropH;
+    channelParam->VPP.Width = ALIGN16(channelParam->VPP.CropW);
+    channelParam->VPP.Height = ALIGN16(channelParam->VPP.CropH);
+    channelParam->VPP.ChannelId = 1;
+    channelParam->Protected = 0;
+    channelParam->IOPattern = MFX_IOPATTERN_IN_VIDEO_MEMORY | MFX_IOPATTERN_OUT_VIDEO_MEMORY;
+    channelParam->ExtParam = nullptr;
+    channelParam->NumExtParam = 0;
 
-        channelParam[1]->VPP.FourCC = MFX_FOURCC_RGBP;
-        channelParam[1]->VPP.ChromaFormat = decodeParams.mfx.FrameInfo.ChromaFormat;
-        channelParam[1]->VPP.PicStruct = MFX_PICSTRUCT_PROGRESSIVE;
-        channelParam[1]->VPP.FrameRateExtN = decodeParams.mfx.FrameInfo.FrameRateExtN;
-        channelParam[1]->VPP.FrameRateExtD = decodeParams.mfx.FrameInfo.FrameRateExtD;
-        channelParam[1]->VPP.CropW = decodeParams.mfx.FrameInfo.CropW;
-        channelParam[1]->VPP.CropH = decodeParams.mfx.FrameInfo.CropH;
-        channelParam[1]->VPP.Width = ALIGN16(channelParam[1]->VPP.CropW);
-        channelParam[1]->VPP.Height = ALIGN16(channelParam[1]->VPP.CropH);
-        channelParam[1]->VPP.ChannelId = 2;
-        channelParam[1]->Protected = 0;
-        channelParam[1]->IOPattern = MFX_IOPATTERN_IN_VIDEO_MEMORY | MFX_IOPATTERN_OUT_VIDEO_MEMORY;
-        channelParam[1]->ExtParam = nullptr;
-        channelParam[1]->NumExtParam = 0;
-    }
 
-    CHECK(MFXVideoDECODE_VPP_Init(session, &decodeParams, channelParam, 2));
+    CHECK(MFXVideoDECODE_VPP_Init(session, &decodeParams, &channelParam, 1));
 
 //    CHECK(MFXVideoDECODE_Init(session, &decodeParams))
 
@@ -276,98 +254,78 @@ int main() {
     auto fourcc_str = ""s + (char) (fourcc & mask) + (char) ((fourcc & mask << 8) >> 8) +
                       (char) ((fourcc & mask << 16) >> 16) + (char) ((fourcc & mask << 24) >> 24);
     cout << "image format name: " << fourcc_str << endl;
-    if (fourcc != MFX_FOURCC_NV12) {
-        CHECK(MFX_ERR_UNSUPPORTED);
-    }
+    if (fourcc != MFX_FOURCC_NV12)exit(-1);
     mfxSurfaceArray *surface_out;
 //    mfxSyncPoint syncPoint;
 
     auto start = clock();
-    mfxU32 skip_channels[1] = {1};
     CHECK(MFXVideoDECODE_VPP_DecodeFrameAsync(session, &bitstream, nullptr, 0, &surface_out));
-    for (int i = 0; i < surface_out->NumSurfaces; ++i) {
-        auto aSurf = surface_out->Surfaces[i];
-        CHECK(aSurf->FrameInterface->Synchronize(aSurf, 1000));
-        printf("i: %d,ChannelID: %d\n", i, aSurf->Info.ChannelId);
-        if (aSurf->Info.ChannelId == 2) {
-            CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ));
-            auto *info = &aSurf->Info;
-            auto *data = &aSurf->Data;
-            auto pitch = data->Pitch;
-        } else {
-            CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ));
-            CHECK(aSurf->FrameInterface->Unmap(aSurf));
+
+    CHECK(surface_out->Surfaces[0]->FrameInterface->Synchronize(surface_out->Surfaces[0], 1000));
+    CHECK(surface_out->Surfaces[0]->FrameInterface->Release(surface_out->Surfaces[0]));
+    auto aSurf = surface_out->Surfaces[1];
+    mfxHDL handle = nullptr;
+    mfxResourceType resourceType;
+    CHECK(aSurf->FrameInterface->GetNativeHandle(aSurf, &handle, &resourceType));
+    auto *texture = static_cast<ID3D11Texture2D *>(handle);
+    cout << "Resource type: ";
+    switch (resourceType) {
+        case MFX_RESOURCE_SYSTEM_SURFACE:
+            cout << "MFX_RESOURCE_SYSTEM_SURFACE";
+            break;
+        case MFX_RESOURCE_VA_SURFACE_PTR:
+            cout << "MFX_RESOURCE_VA_SURFACE_PTR";
+            break;
+        case MFX_RESOURCE_VA_BUFFER_PTR:
+            cout << "MFX_RESOURCE_VA_BUFFER_PTR";
+            break;
+        case MFX_RESOURCE_DX9_SURFACE:
+            cout << "MFX_RESOURCE_DX9_SURFACE";
+            break;
+        case MFX_RESOURCE_DX11_TEXTURE:
+            cout << "MFX_RESOURCE_DX11_TEXTURE";
+            break;
+        case MFX_RESOURCE_DX12_RESOURCE:
+            cout << "MFX_RESOURCE_DX12_RESOURCE";
+            break;
+        case MFX_RESOURCE_DMA_RESOURCE:
+            cout << "MFX_RESOURCE_DMA_RESOURCE";
+            break;
+        case MFX_RESOURCE_HDDLUNITE_REMOTE_MEMORY:
+            cout << "MFX_RESOURCE_HDDLUNITE_REMOTE_MEMORY";
+            break;
+    }
+    cout << endl;
+    cout << handle << endl;
+    CHECK(aSurf->FrameInterface->Synchronize(aSurf, 1000));
+    cout << (clock() - start) << "ms" << endl;
+    CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ));
+    auto *info = &aSurf->Info;
+    auto *data = &aSurf->Data;
+    auto pitch = data->Pitch;
+    auto h = info->CropH;
+    auto w = info->CropW;
+    cout << "pitch :" << pitch << endl;
+    cout << w << "x" << h << endl;
+
+    fourcc = info->FourCC;
+    fourcc_str = ""s + (char) (fourcc & mask) + (char) ((fourcc & mask << 8) >> 8) +
+                 (char) ((fourcc & mask << 16) >> 16) + (char) ((fourcc & mask << 24) >> 24);
+    cout << "image format name: " << fourcc_str << endl;
+    bmp::Bitmap img(w, h);
+    for (int i = 0; i < h; ++i) {
+        for (int j = 0; j < w; ++j) {
+            bmp::Pixel pixel;
+            pixel.r = *(data->R + i * pitch + 4 * j);
+            pixel.g = *(data->G + i * pitch + 4 * j);
+            pixel.b = *(data->B + i * pitch + 4 * j);
+            img.set(j, i, pixel);
         }
-        CHECK(aSurf->FrameInterface->Release(aSurf));
 
     }
-
-//    auto aSurf = surface_out->Surfaces[2];
-//    mfxU32 refCount;
-//    CHECK(aSurf->FrameInterface->GetRefCounter(aSurf, &refCount));
-//    cout << "refCount: " << refCount << endl;
-//    mfxHDL handle = nullptr;
-//    mfxResourceType resourceType;
-//    CHECK(aSurf->FrameInterface->GetNativeHandle(aSurf, &handle, &resourceType));
-//    auto *texture = static_cast<ID3D11Texture2D *>(handle);
-//    cout << "Resource type: ";
-//    switch (resourceType) {
-//        case MFX_RESOURCE_SYSTEM_SURFACE:
-//            cout << "MFX_RESOURCE_SYSTEM_SURFACE";
-//            break;
-//        case MFX_RESOURCE_VA_SURFACE_PTR:
-//            cout << "MFX_RESOURCE_VA_SURFACE_PTR";
-//            break;
-//        case MFX_RESOURCE_VA_BUFFER_PTR:
-//            cout << "MFX_RESOURCE_VA_BUFFER_PTR";
-//            break;
-//        case MFX_RESOURCE_DX9_SURFACE:
-//            cout << "MFX_RESOURCE_DX9_SURFACE";
-//            break;
-//        case MFX_RESOURCE_DX11_TEXTURE:
-//            cout << "MFX_RESOURCE_DX11_TEXTURE";
-//            break;
-//        case MFX_RESOURCE_DX12_RESOURCE:
-//            cout << "MFX_RESOURCE_DX12_RESOURCE";
-//            break;
-//        case MFX_RESOURCE_DMA_RESOURCE:
-//            cout << "MFX_RESOURCE_DMA_RESOURCE";
-//            break;
-//        case MFX_RESOURCE_HDDLUNITE_REMOTE_MEMORY:
-//            cout << "MFX_RESOURCE_HDDLUNITE_REMOTE_MEMORY";
-//            break;
-//    }
-//    cout << endl;
-//    cout << handle << endl;
-//    CHECK(aSurf->FrameInterface->Synchronize(aSurf, 1000));
-//    cout << (clock() - start) << "ms" << endl;
-//    CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ));
-//    auto *info = &aSurf->Info;
-//    auto *data = &aSurf->Data;
-//    auto pitch = data->Pitch;
-//    auto h = info->CropH;
-//    auto w = info->CropW;
-//    cout << "pitch :" << pitch << endl;
-//    cout << w << "x" << h << endl;
-//
-//    fourcc = info->FourCC;
-//    fourcc_str = ""s + (char) (fourcc & mask) + (char) ((fourcc & mask << 8) >> 8) +
-//                 (char) ((fourcc & mask << 16) >> 16) + (char) ((fourcc & mask << 24) >> 24);
-//    cout << "image format name: " << fourcc_str << endl;
-//    bmp::Bitmap img(w, h);
-//    for (int i = 0; i < h; ++i) {
-//        for (int j = 0; j < w; ++j) {
-//            bmp::Pixel pixel;
-//            pixel.r = *(data->R + i * pitch + 4 * j);
-//            pixel.g = *(data->G + i * pitch + 4 * j);
-//            pixel.b = *(data->B + i * pitch + 4 * j);
-//            img.set(j, i, pixel);
-//        }
-//
-//    }
-//    aSurf->FrameInterface->Release(aSurf);
-//    img.save("rgb.bmp");
-//    MFXVideoVPP_Close(session);
+    aSurf->FrameInterface->Release(aSurf);
+    img.save("rgb.bmp");
+    MFXVideoVPP_Close(session);
 }
 
 
