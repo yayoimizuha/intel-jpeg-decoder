@@ -200,6 +200,14 @@ int main() {
 //                  });
     MFXDispReleaseImplDescription(loader, hdl);
 
+
+//    mfxHDL hdl;
+//    MFXEnumImplementations(loader, impl_idx, mfxImplCapsDeliveryFormat::MFX_IMPLCAPS_DEVICE_ID_EXTENDED, &hdl);
+//    auto *extendedDeviceID = static_cast<mfxExtendedDeviceId *>(hdl);
+//    cout << extendedDeviceID->DeviceName << endl;
+//    MFXDispReleaseImplDescription(loader, hdl);
+
+
     mfxBitstream bitstream = {};
 
     bitstream.MaxLength = BITSTREAM_BUFFER_SIZE;
@@ -283,22 +291,31 @@ int main() {
 //    mfxSyncPoint syncPoint;
 
     auto start = clock();
-    mfxU32 skip_channels[1] = {1};
+//    mfxU32 skip_channels[2] = {0, 1};
     CHECK(MFXVideoDECODE_VPP_DecodeFrameAsync(session, &bitstream, nullptr, 0, &surface_out));
+    CHECK(MFXVideoDECODE_VPP_DecodeFrameAsync(session, nullptr, nullptr, 0, &surface_out));
+    CHECK(MFXVideoDECODE_VPP_DecodeFrameAsync(session, nullptr, nullptr, 0, &surface_out));
     for (int i = 0; i < surface_out->NumSurfaces; ++i) {
         auto aSurf = surface_out->Surfaces[i];
         CHECK(aSurf->FrameInterface->Synchronize(aSurf, 1000));
         printf("i: %d,ChannelID: %d\n", i, aSurf->Info.ChannelId);
+
+        mfxU32 refCount;
+        CHECK(aSurf->FrameInterface->GetRefCounter(aSurf, &refCount));
+        cout << "refCount: " << refCount << endl;
+
         if (aSurf->Info.ChannelId == 2) {
-            CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ));
+            CHECK(aSurf->FrameInterface->Map(aSurf, mfxMemoryFlags::MFX_MAP_READ));
             auto *info = &aSurf->Info;
             auto *data = &aSurf->Data;
             auto pitch = data->Pitch;
         } else {
-            CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ));
-            CHECK(aSurf->FrameInterface->Unmap(aSurf));
+//            CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ));
+//            CHECK(aSurf->FrameInterface->Unmap(aSurf));
         }
         CHECK(aSurf->FrameInterface->Release(aSurf));
+//        CHECK(MFXVideoDECODE_VPP_DecodeFrameAsync(session, &bitstream, nullptr, 0, &surface_out));
+
 
     }
 
