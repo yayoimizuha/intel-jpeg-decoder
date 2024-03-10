@@ -18,27 +18,31 @@
 #include <string.h>
 
 #ifdef USE_MEDIASDK1
-    #include "mfxvideo.h"
+#include "mfxvideo.h"
 enum {
     MFX_FOURCC_I420 = MFX_FOURCC_IYUV /*!< Alias for the IYUV color format. */
 };
 #else
-    #include "vpl/mfxjpeg.h"
-    #include "vpl/mfxvideo.h"
+
+#include "vpl/mfxjpeg.h"
+#include "vpl/mfxvideo.h"
+
 #endif
 
 #if (MFX_VERSION >= 2000)
-    #include "vpl/mfxdispatcher.h"
+
+#include "vpl/mfxdispatcher.h"
+
 #endif
 
 #ifdef __linux__
-    #include <fcntl.h>
-    #include <unistd.h>
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 
 #ifdef LIBVA_SUPPORT
-    #include "va/va.h"
-    #include "va/va_drm.h"
+#include "va/va.h"
+#include "va/va_drm.h"
 #endif
 
 #define WAIT_100_MILLISECONDS 100
@@ -58,7 +62,9 @@ enum {
 #define ALIGN32(X)               (((mfxU32)((X) + 31)) & (~(mfxU32)31))
 #define VPLVERSION(major, minor) (major << 16 | minor)
 
-enum ExampleParams { PARAM_IMPL = 0, PARAM_INFILE, PARAM_INRES, PARAM_COUNT };
+enum ExampleParams {
+    PARAM_IMPL = 0, PARAM_INFILE, PARAM_INRES, PARAM_COUNT
+};
 enum ParamGroup {
     PARAMS_CREATESESSION = 0,
     PARAMS_DECODE,
@@ -119,18 +125,15 @@ bool ParseArgsAndValidate(int argc, char *argv[], Params *params, ParamGroup gro
             if (!params->infileName) {
                 return false;
             }
-        }
-        else if (IS_ARG_EQ(s, "m")) {
+        } else if (IS_ARG_EQ(s, "m")) {
             params->inmodelName = ValidateFileName(argv[idx++]);
             if (!params->inmodelName) {
                 return false;
             }
-        }
-        else if (IS_ARG_EQ(s, "w")) {
+        } else if (IS_ARG_EQ(s, "w")) {
             if (!ValidateSize(argv[idx++], &params->srcWidth, MAX_WIDTH))
                 return false;
-        }
-        else if (IS_ARG_EQ(s, "h")) {
+        } else if (IS_ARG_EQ(s, "h")) {
             if (!ValidateSize(argv[idx++], &params->srcHeight, MAX_HEIGHT))
                 return false;
         }
@@ -198,7 +201,7 @@ void FreeAcceleratorHandle(void *accelHandle, int fd) {
 //Shows implementation info for Media SDK or Intel® VPL
 mfxVersion ShowImplInfo(mfxSession session) {
     mfxIMPL impl;
-    mfxVersion version = { 0, 1 };
+    mfxVersion version = {0, 1};
 
     mfxStatus sts = MFXQueryIMPL(session, &impl);
     if (sts != MFX_ERR_NONE)
@@ -236,7 +239,7 @@ void ShowImplementationInfo(mfxLoader loader, mfxU32 implnum) {
     mfxImplDescription *idesc = nullptr;
     mfxStatus sts;
     //Loads info about implementation at specified list location
-    sts = MFXEnumImplementations(loader, implnum, MFX_IMPLCAPS_IMPLDESCSTRUCTURE, (mfxHDL *)&idesc);
+    sts = MFXEnumImplementations(loader, implnum, MFX_IMPLCAPS_IMPLDESCSTRUCTURE, (mfxHDL *) &idesc);
     if (!idesc || (sts != MFX_ERR_NONE))
         return;
 
@@ -282,7 +285,7 @@ void ShowImplementationInfo(mfxLoader loader, mfxU32 implnum) {
 #if (MFX_VERSION >= 2004)
     //Show implementation path, added in 2.4 API
     mfxHDL implPath = nullptr;
-    sts             = MFXEnumImplementations(loader, implnum, MFX_IMPLCAPS_IMPLPATH, &implPath);
+    sts = MFXEnumImplementations(loader, implnum, MFX_IMPLCAPS_IMPLPATH, &implPath);
     if (!implPath || (sts != MFX_ERR_NONE))
         return;
 
@@ -293,20 +296,20 @@ void ShowImplementationInfo(mfxLoader loader, mfxU32 implnum) {
 
 void PrepareFrameInfo(mfxFrameInfo *fi, mfxU32 format, mfxU16 w, mfxU16 h) {
     // Video processing input data format
-    fi->FourCC        = format;
-    fi->ChromaFormat  = MFX_CHROMAFORMAT_YUV420;
-    fi->CropX         = 0;
-    fi->CropY         = 0;
-    fi->CropW         = w;
-    fi->CropH         = h;
-    fi->PicStruct     = MFX_PICSTRUCT_PROGRESSIVE;
+    fi->FourCC = format;
+    fi->ChromaFormat = MFX_CHROMAFORMAT_YUV420;
+    fi->CropX = 0;
+    fi->CropY = 0;
+    fi->CropW = w;
+    fi->CropH = h;
+    fi->PicStruct = MFX_PICSTRUCT_PROGRESSIVE;
     fi->FrameRateExtN = 30;
     fi->FrameRateExtD = 1;
     // width must be a multiple of 16
     // height must be a multiple of 16 in case of frame picture and a multiple of 32 in case of field picture
     fi->Width = ALIGN16(fi->CropW);
     fi->Height =
-        (MFX_PICSTRUCT_PROGRESSIVE == fi->PicStruct) ? ALIGN16(fi->CropH) : ALIGN32(fi->CropH);
+            (MFX_PICSTRUCT_PROGRESSIVE == fi->PicStruct) ? ALIGN16(fi->CropH) : ALIGN32(fi->CropH);
 }
 
 mfxU32 GetSurfaceSize(mfxU32 FourCC, mfxU32 width, mfxU32 height) {
@@ -351,7 +354,7 @@ mfxStatus AllocateExternalSystemMemorySurfacePool(mfxU8 **buf,
         return MFX_ERR_MEMORY_ALLOC;
 
     size_t framePoolBufSize = static_cast<size_t>(surfaceSize) * surfnum;
-    *buf                    = reinterpret_cast<mfxU8 *>(calloc(framePoolBufSize, 1));
+    *buf = reinterpret_cast<mfxU8 *>(calloc(framePoolBufSize, 1));
 
     mfxU16 surfW;
     mfxU16 surfH = frame_info.Height;
@@ -360,40 +363,38 @@ mfxStatus AllocateExternalSystemMemorySurfacePool(mfxU8 **buf,
         surfW = frame_info.Width * 4;
 
         for (mfxU32 i = 0; i < surfnum; i++) {
-            surfpool[i]            = { 0 };
-            surfpool[i].Info       = frame_info;
-            size_t buf_offset      = static_cast<size_t>(i) * surfaceSize;
-            surfpool[i].Data.B     = *buf + buf_offset;
-            surfpool[i].Data.G     = surfpool[i].Data.B + 1;
-            surfpool[i].Data.R     = surfpool[i].Data.B + 2;
-            surfpool[i].Data.A     = surfpool[i].Data.B + 3;
+            surfpool[i] = {0};
+            surfpool[i].Info = frame_info;
+            size_t buf_offset = static_cast<size_t>(i) * surfaceSize;
+            surfpool[i].Data.B = *buf + buf_offset;
+            surfpool[i].Data.G = surfpool[i].Data.B + 1;
+            surfpool[i].Data.R = surfpool[i].Data.B + 2;
+            surfpool[i].Data.A = surfpool[i].Data.B + 3;
             surfpool[i].Data.Pitch = surfW;
         }
-    }
-    else if (frame_info.FourCC == MFX_FOURCC_BGR4) {
+    } else if (frame_info.FourCC == MFX_FOURCC_BGR4) {
         surfW = frame_info.Width * 4;
 
         for (mfxU32 i = 0; i < surfnum; i++) {
-            surfpool[i]            = { 0 };
-            surfpool[i].Info       = frame_info;
-            size_t buf_offset      = static_cast<size_t>(i) * surfaceSize;
-            surfpool[i].Data.R     = *buf + buf_offset;
-            surfpool[i].Data.G     = surfpool[i].Data.R + 1;
-            surfpool[i].Data.B     = surfpool[i].Data.R + 2;
-            surfpool[i].Data.A     = surfpool[i].Data.R + 3;
+            surfpool[i] = {0};
+            surfpool[i].Info = frame_info;
+            size_t buf_offset = static_cast<size_t>(i) * surfaceSize;
+            surfpool[i].Data.R = *buf + buf_offset;
+            surfpool[i].Data.G = surfpool[i].Data.R + 1;
+            surfpool[i].Data.B = surfpool[i].Data.R + 2;
+            surfpool[i].Data.A = surfpool[i].Data.R + 3;
             surfpool[i].Data.Pitch = surfW;
         }
-    }
-    else {
+    } else {
         surfW = (frame_info.FourCC == MFX_FOURCC_P010) ? frame_info.Width * 2 : frame_info.Width;
 
         for (mfxU32 i = 0; i < surfnum; i++) {
-            surfpool[i]            = { 0 };
-            surfpool[i].Info       = frame_info;
-            size_t buf_offset      = static_cast<size_t>(i) * surfaceSize;
-            surfpool[i].Data.Y     = *buf + buf_offset;
-            surfpool[i].Data.U     = *buf + buf_offset + (surfW * surfH);
-            surfpool[i].Data.V     = surfpool[i].Data.U + ((surfW / 2) * (surfH / 2));
+            surfpool[i] = {0};
+            surfpool[i].Info = frame_info;
+            size_t buf_offset = static_cast<size_t>(i) * surfaceSize;
+            surfpool[i].Data.Y = *buf + buf_offset;
+            surfpool[i].Data.U = *buf + buf_offset + (surfW * surfH);
+            surfpool[i].Data.V = surfpool[i].Data.U + ((surfW / 2) * (surfH / 2));
             surfpool[i].Data.Pitch = surfW;
         }
     }
@@ -412,6 +413,7 @@ void FreeExternalSystemMemorySurfacePool(mfxU8 *dec_buf, mfxFrameSurface1 *surfp
 
 // Read encoded stream from file
 mfxStatus ReadEncodedStream(mfxBitstream &bs, FILE *f) {
+    printf("ReadEncodedStream\n");
     mfxU8 *p0 = bs.Data;
     mfxU8 *p1 = bs.Data + bs.DataOffset;
     if (bs.DataOffset > bs.MaxLength - 1) {
@@ -424,7 +426,7 @@ mfxStatus ReadEncodedStream(mfxBitstream &bs, FILE *f) {
         *(p0++) = *(p1++);
     }
     bs.DataOffset = 0;
-    bs.DataLength += (mfxU32)fread(bs.Data + bs.DataLength, 1, bs.MaxLength - bs.DataLength, f);
+    bs.DataLength += (mfxU32) fread(bs.Data + bs.DataLength, 1, bs.MaxLength - bs.DataLength, f);
     if (bs.DataLength == 0)
         return MFX_ERR_MORE_DATA;
 
@@ -453,9 +455,9 @@ mfxStatus ReadRawFrame(mfxFrameSurface1 *surface, FILE *f) {
         case MFX_FOURCC_I420:
             // read luminance plane (Y)
             pitch = data->Pitch;
-            ptr   = data->Y;
+            ptr = data->Y;
             for (i = 0; i < h; i++) {
-                bytes_read = (mfxU32)fread(ptr + i * pitch, 1, w, f);
+                bytes_read = (mfxU32) fread(ptr + i * pitch, 1, w, f);
                 if (w != bytes_read)
                     return MFX_ERR_MORE_DATA;
             }
@@ -466,14 +468,14 @@ mfxStatus ReadRawFrame(mfxFrameSurface1 *surface, FILE *f) {
             w /= 2;
             ptr = data->U;
             for (i = 0; i < h; i++) {
-                bytes_read = (mfxU32)fread(ptr + i * pitch, 1, w, f);
+                bytes_read = (mfxU32) fread(ptr + i * pitch, 1, w, f);
                 if (w != bytes_read)
                     return MFX_ERR_MORE_DATA;
             }
 
             ptr = data->V;
             for (i = 0; i < h; i++) {
-                bytes_read = (mfxU32)fread(ptr + i * pitch, 1, w, f);
+                bytes_read = (mfxU32) fread(ptr + i * pitch, 1, w, f);
                 if (w != bytes_read)
                     return MFX_ERR_MORE_DATA;
             }
@@ -512,6 +514,7 @@ mfxStatus ReadRawFrame(mfxFrameSurface1 *surface, FILE *f) {
 }
 
 #if (MFX_VERSION >= 2000)
+
 mfxStatus ReadRawFrame_InternalMem(mfxFrameSurface1 *surface, FILE *f) {
     bool is_more_data = false;
 
@@ -539,6 +542,7 @@ mfxStatus ReadRawFrame_InternalMem(mfxFrameSurface1 *surface, FILE *f) {
 
     return (is_more_data == true) ? MFX_ERR_MORE_DATA : MFX_ERR_NONE;
 }
+
 #endif
 
 // Write raw I420 frame to file
@@ -605,6 +609,7 @@ mfxStatus WriteRawFrame(mfxFrameSurface1 *surface, FILE *f) {
 }
 
 #if (MFX_VERSION >= 2000)
+
 // Write raw frame to file
 mfxStatus WriteRawFrame_InternalMem(mfxFrameSurface1 *surface, FILE *f) {
     mfxStatus sts = surface->FrameInterface->Map(surface, MFX_MAP_READ);
@@ -627,6 +632,7 @@ mfxStatus WriteRawFrame_InternalMem(mfxFrameSurface1 *surface, FILE *f) {
 
     return sts;
 }
+
 #endif
 
 #endif //EXAMPLES_UTIL_HPP_

@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.27)
+
 project(oneAPI_test)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -13,17 +14,19 @@ message("VPL_INCLUDE_DIR: " ${VPL_INCLUDE_DIR})
 add_executable(JPEG_DECODER main.cpp)
 add_executable(JPEG_DECODER_RGB dec_rgb.cpp)
 add_executable(JPEG_DECODER_RGB4 dec_rgb4.cpp)
-add_executable(example hello-decode.cpp)
+add_executable(example-hello-decode hello-decode.cpp)
+add_executable(example-hello-decvpp hello-decvpp.cpp)
 
 include_directories(${VPL_INCLUDE_DIR})
 
 link_directories(${VPL_SHLIB_DIR})
 
 
-target_link_libraries(JPEG_DECODER  ${VPL_LIB_DIR}/vpl.lib)
-target_link_libraries(JPEG_DECODER_RGB  ${VPL_LIB_DIR}/vpl.lib)
-target_link_libraries(JPEG_DECODER_RGB4  ${VPL_LIB_DIR}/vpl.lib)
-target_link_libraries(example  ${VPL_LIB_DIR}/vpl.lib)
+target_link_libraries(JPEG_DECODER ${VPL_LIB_DIR}/vpl.lib)
+target_link_libraries(JPEG_DECODER_RGB ${VPL_LIB_DIR}/vpl.lib)
+target_link_libraries(JPEG_DECODER_RGB4 ${VPL_LIB_DIR}/vpl.lib)
+target_link_libraries(example-hello-decode ${VPL_LIB_DIR}/vpl.lib)
+target_link_libraries(example-hello-decvpp ${VPL_LIB_DIR}/vpl.lib)
 #include(cmake/CPM.cmake)
 #
 #CPMAddPackage(

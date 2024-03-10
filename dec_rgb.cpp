@@ -128,6 +128,19 @@ void check(mfxStatus x, int LINE) {
 #define ALIGN16(value) (((value + 15) >> 4) << 4)
 const char *PATH = R"(C:\Users\tomokazu\friends-4385686.jpg)";
 
+mfxStatus ReadEncodedStream(mfxBitstream &bs, FILE *f) {
+    printf("ReadEncodedStream\n");
+    cout << "offset: " << bs.DataOffset << endl;
+    cout << "length: " << bs.DataLength << endl;
+    memmove(bs.Data, bs.Data + bs.DataOffset, bs.DataLength);
+    bs.DataOffset = 0;
+    bs.DataLength += (mfxU32) fread(bs.Data + bs.DataLength, 1, bs.MaxLength - bs.DataLength, f);
+    if (bs.DataLength == 0)
+        return MFX_ERR_MORE_DATA;
+
+    return MFX_ERR_NONE;
+}
+
 int main() {
     auto loader = MFXLoad();
     auto cfg = MFXCreateConfig(loader);
@@ -202,10 +215,10 @@ int main() {
 
 
 //    mfxHDL hdl;
-//    MFXEnumImplementations(loader, impl_idx, mfxImplCapsDeliveryFormat::MFX_IMPLCAPS_DEVICE_ID_EXTENDED, &hdl);
+    MFXEnumImplementations(loader, impl_idx, mfxImplCapsDeliveryFormat::MFX_IMPLCAPS_IMPLPATH, &hdl);
 //    auto *extendedDeviceID = static_cast<mfxExtendedDeviceId *>(hdl);
-//    cout << extendedDeviceID->DeviceName << endl;
-//    MFXDispReleaseImplDescription(loader, hdl);
+    cout << "Driver PATH: " << reinterpret_cast<mfxChar *>(hdl) << endl;
+    MFXDispReleaseImplDescription(loader, hdl);
 
 
     mfxBitstream bitstream = {};
@@ -220,8 +233,10 @@ int main() {
         cout << "fail to open file" << endl;
         exit(ERROR_FILE_NOT_FOUND);
     }
-    bitstream.DataLength += fread(bitstream.Data + bitstream.DataLength, 1, bitstream.MaxLength - bitstream.DataLength,
-                                  input_file);
+//    bitstream.DataLength += fread(bitstream.Data + bitstream.DataLength, 1, bitstream.MaxLength - bitstream.DataLength,
+//                                  input_file);
+
+    ReadEncodedStream(bitstream, input_file);
 
     mfxVideoParam decodeParams = {};
     mfxVideoParam decodeVPPParams = {};
@@ -289,102 +304,80 @@ int main() {
     }
     mfxSurfaceArray *surface_out;
 //    mfxSyncPoint syncPoint;
-
-    auto start = clock();
-//    mfxU32 skip_channels[2] = {0, 1};
-    CHECK(MFXVideoDECODE_VPP_DecodeFrameAsync(session, &bitstream, nullptr, 0, &surface_out));
-    CHECK(MFXVideoDECODE_VPP_DecodeFrameAsync(session, nullptr, nullptr, 0, &surface_out));
-    CHECK(MFXVideoDECODE_VPP_DecodeFrameAsync(session, nullptr, nullptr, 0, &surface_out));
-    for (int i = 0; i < surface_out->NumSurfaces; ++i) {
-        auto aSurf = surface_out->Surfaces[i];
-        CHECK(aSurf->FrameInterface->Synchronize(aSurf, 1000));
-        printf("i: %d,ChannelID: %d\n", i, aSurf->Info.ChannelId);
-
-        mfxU32 refCount;
-        CHECK(aSurf->FrameInterface->GetRefCounter(aSurf, &refCount));
-        cout << "refCount: " << refCount << endl;
-
-        if (aSurf->Info.ChannelId == 2) {
-            CHECK(aSurf->FrameInterface->Map(aSurf, mfxMemoryFlags::MFX_MAP_READ));
-            auto *info = &aSurf->Info;
-            auto *data = &aSurf->Data;
-            auto pitch = data->Pitch;
-        } else {
-//            CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ));
-//            CHECK(aSurf->FrameInterface->Unmap(aSurf));
+    bool isDraining = false;
+    bool isStillGoing = true;
+    mfxStatus sts;
+    mfxU32 framenum = 0;
+    mfxFrameSurface1 *aSurf;
+    while (isStillGoing) {
+        // Load encoded stream if not draining
+        if (!isDraining) {
+            cout << "read stream " << endl;
+            sts = ReadEncodedStream(bitstream, input_file);
+            if (sts != MFX_ERR_NONE)
+                isDraining = true;
         }
-        CHECK(aSurf->FrameInterface->Release(aSurf));
-//        CHECK(MFXVideoDECODE_VPP_DecodeFrameAsync(session, &bitstream, nullptr, 0, &surface_out));
 
+        sts = MFXVideoDECODE_VPP_DecodeFrameAsync(session,
+                                                  (isDraining) ? nullptr : &bitstream,
+                                                  nullptr,
+                                                  0,
+                                                  &surface_out);
+        cout << framenum << " :" << ((isDraining) ? "nullptr" : "&bitstream") << endl;
 
+        cout << "Async status: " << sts << endl;
+        switch (sts) {
+            case MFX_ERR_NONE:
+                // decode output
+                if (surface_out == nullptr) {
+                    printf("ERROR - empty array of surfaces.\n");
+                    isStillGoing = false;
+                    continue;
+                }
+
+                for (mfxU32 i = 0; i < surface_out->NumSurfaces; i++) {
+                    aSurf = surface_out->Surfaces[i];
+                    do {
+                        sts = aSurf->FrameInterface->Synchronize(aSurf, 1000);
+                        CHECK(sts);
+                        if (sts == MFX_ERR_NONE) {
+                            if (aSurf->Info.ChannelId == 0) { // decoder output
+//                                sts = WriteRawFrame_InternalMem(aSurf, sinkDec);
+
+                                CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ));
+                                cout << "map" << endl;
+                            }
+                        }
+                        if (sts != MFX_WRN_IN_EXECUTION) {
+                            sts = aSurf->FrameInterface->Release(aSurf);
+                            CHECK(sts);
+                        }
+
+                    } while (sts == MFX_WRN_IN_EXECUTION);
+                }
+                framenum++;
+
+                sts = surface_out->Release(surface_out);
+                CHECK(sts);
+                surface_out = nullptr;
+
+                break;
+
+            case MFX_ERR_MORE_DATA:
+                // The function requires more bitstream at input before decoding can proceed
+                if (isDraining)
+                    isStillGoing = false;
+                break;
+            default:
+                printf("unknown status %d\n", sts);
+                isStillGoing = false;
+                break;
+        }
     }
 
+
+
 //    auto aSurf = surface_out->Surfaces[2];
-//    mfxU32 refCount;
-//    CHECK(aSurf->FrameInterface->GetRefCounter(aSurf, &refCount));
-//    cout << "refCount: " << refCount << endl;
-//    mfxHDL handle = nullptr;
-//    mfxResourceType resourceType;
-//    CHECK(aSurf->FrameInterface->GetNativeHandle(aSurf, &handle, &resourceType));
-//    auto *texture = static_cast<ID3D11Texture2D *>(handle);
-//    cout << "Resource type: ";
-//    switch (resourceType) {
-//        case MFX_RESOURCE_SYSTEM_SURFACE:
-//            cout << "MFX_RESOURCE_SYSTEM_SURFACE";
-//            break;
-//        case MFX_RESOURCE_VA_SURFACE_PTR:
-//            cout << "MFX_RESOURCE_VA_SURFACE_PTR";
-//            break;
-//        case MFX_RESOURCE_VA_BUFFER_PTR:
-//            cout << "MFX_RESOURCE_VA_BUFFER_PTR";
-//            break;
-//        case MFX_RESOURCE_DX9_SURFACE:
-//            cout << "MFX_RESOURCE_DX9_SURFACE";
-//            break;
-//        case MFX_RESOURCE_DX11_TEXTURE:
-//            cout << "MFX_RESOURCE_DX11_TEXTURE";
-//            break;
-//        case MFX_RESOURCE_DX12_RESOURCE:
-//            cout << "MFX_RESOURCE_DX12_RESOURCE";
-//            break;
-//        case MFX_RESOURCE_DMA_RESOURCE:
-//            cout << "MFX_RESOURCE_DMA_RESOURCE";
-//            break;
-//        case MFX_RESOURCE_HDDLUNITE_REMOTE_MEMORY:
-//            cout << "MFX_RESOURCE_HDDLUNITE_REMOTE_MEMORY";
-//            break;
-//    }
-//    cout << endl;
-//    cout << handle << endl;
-//    CHECK(aSurf->FrameInterface->Synchronize(aSurf, 1000));
-//    cout << (clock() - start) << "ms" << endl;
-//    CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ));
-//    auto *info = &aSurf->Info;
-//    auto *data = &aSurf->Data;
-//    auto pitch = data->Pitch;
-//    auto h = info->CropH;
-//    auto w = info->CropW;
-//    cout << "pitch :" << pitch << endl;
-//    cout << w << "x" << h << endl;
-//
-//    fourcc = info->FourCC;
-//    fourcc_str = ""s + (char) (fourcc & mask) + (char) ((fourcc & mask << 8) >> 8) +
-//                 (char) ((fourcc & mask << 16) >> 16) + (char) ((fourcc & mask << 24) >> 24);
-//    cout << "image format name: " << fourcc_str << endl;
-//    bmp::Bitmap img(w, h);
-//    for (int i = 0; i < h; ++i) {
-//        for (int j = 0; j < w; ++j) {
-//            bmp::Pixel pixel;
-//            pixel.r = *(data->R + i * pitch + 4 * j);
-//            pixel.g = *(data->G + i * pitch + 4 * j);
-//            pixel.b = *(data->B + i * pitch + 4 * j);
-//            img.set(j, i, pixel);
-//        }
-//
-//    }
-//    aSurf->FrameInterface->Release(aSurf);
-//    img.save("rgb.bmp");
-//    MFXVideoVPP_Close(session);
 }
 
 
