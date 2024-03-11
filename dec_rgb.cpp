@@ -135,6 +135,9 @@ mfxStatus ReadEncodedStream(mfxBitstream &bs, FILE *f) {
     memmove(bs.Data, bs.Data + bs.DataOffset, bs.DataLength);
     bs.DataOffset = 0;
     bs.DataLength += (mfxU32) fread(bs.Data + bs.DataLength, 1, bs.MaxLength - bs.DataLength, f);
+
+    cout << "offset: " << bs.DataOffset << endl;
+    cout << "length: " << bs.DataLength << endl;
     if (bs.DataLength == 0)
         return MFX_ERR_MORE_DATA;
 
