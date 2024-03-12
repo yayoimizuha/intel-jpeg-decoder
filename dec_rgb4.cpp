@@ -312,19 +312,65 @@ int main() {
     fourcc_str = ""s + (char) (fourcc & mask) + (char) ((fourcc & mask << 8) >> 8) +
                  (char) ((fourcc & mask << 16) >> 16) + (char) ((fourcc & mask << 24) >> 24);
     cout << "image format name: " << fourcc_str << endl;
-    bmp::Bitmap img(w, h);
-    for (int i = 0; i < h; ++i) {
-        for (int j = 0; j < w; ++j) {
-            bmp::Pixel pixel;
-            pixel.r = *(data->R + i * pitch + 4 * j);
-            pixel.g = *(data->G + i * pitch + 4 * j);
-            pixel.b = *(data->B + i * pitch + 4 * j);
-            img.set(j, i, pixel);
-        }
+    uint32_t file_size = 54 + w * h * 4;
+    auto *bitmap = static_cast<uint8_t *>(calloc(file_size, sizeof(uint8_t)));
+    auto rgb = fopen("rgb_bmp.bmp", "wb");
+    struct BitmapFileHeader {
+        uint16_t bfType;
+        uint32_t bfSize;
+        uint16_t bfReserved1;
+        uint16_t bfReserved2;
+        uint32_t bfOffBits;
+    } header{};
+    struct BitmapInfoHeader {
+        uint32_t biSize;
+        int32_t biWidth;
+        int32_t biHeight;
+        uint16_t biPlanes;
+        uint16_t biBitCount;
+        uint32_t biCompression;
+        uint32_t biSizeImage;
+        int32_t biXPelsPerMeter;
+        int32_t biYPelsPerMeter;
+        uint32_t biClrUsed;
+        uint32_t biClrImportant;
+    } infoHeader{};
+    memset(&header,'\0', sizeof(header));
+    memset(&infoHeader,'\0', sizeof(infoHeader));
+    memcpy(&header.bfType, "BM", 2);
+    header.bfSize =0; sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader) + w * h * 4;
+    header.bfOffBits =0; sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader);
 
+    infoHeader.biSize = 40;
+    infoHeader.biWidth = w;
+    infoHeader.biHeight = h;
+    infoHeader.biPlanes = 1;
+    infoHeader.biBitCount = 32;
+    infoHeader.biCompression = 0;
+    infoHeader.biSizeImage = w * h * 4;
+    cout << sizeof(header) << endl;
+    cout << sizeof(infoHeader) << endl;
+    fwrite(&header, sizeof(header), 1, rgb);
+    fwrite(&infoHeader, sizeof(infoHeader), 1, rgb);
+    for (int i = 0; i < h; ++i) {
+        fwrite(data->B + i * pitch, sizeof(data->B[0]) * w * 4, 1, rgb);
     }
-    aSurf->FrameInterface->Release(aSurf);
-    img.save("rgb.bmp");
+    fclose(rgb);
+
+
+    //    bmp::Bitmap img(w, h);
+//    for (int i = 0; i < h; ++i) {
+//        for (int j = 0; j < w; ++j) {
+//            bmp::Pixel pixel;
+//            pixel.r = *(data->R + i * pitch + 4 * j);
+//            pixel.g = *(data->G + i * pitch + 4 * j);
+//            pixel.b = *(data->B + i * pitch + 4 * j);
+//            img.set(j, i, pixel);
+//        }
+//
+//    }
+//    aSurf->FrameInterface->Release(aSurf);
+//    img.save("rgb.bmp");
     MFXVideoVPP_Close(session);
 }
 
