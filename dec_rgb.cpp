@@ -135,6 +135,9 @@ mfxStatus ReadEncodedStream(mfxBitstream &bs, FILE *f) {
     memmove(bs.Data, bs.Data + bs.DataOffset, bs.DataLength);
     bs.DataOffset = 0;
     bs.DataLength += (mfxU32) fread(bs.Data + bs.DataLength, 1, bs.MaxLength - bs.DataLength, f);
+
+    cout << "offset: " << bs.DataOffset << endl;
+    cout << "length: " << bs.DataLength << endl;
     if (bs.DataLength == 0)
         return MFX_ERR_MORE_DATA;
 
@@ -227,16 +230,18 @@ int main() {
     bitstream.DataFlag = MFX_BITSTREAM_COMPLETE_FRAME;
     bitstream.Data = static_cast<mfxU8 *>(calloc(bitstream.MaxLength, sizeof(mfxU8)));
     bitstream.CodecId = MFX_CODEC_JPEG;
+    bitstream.DataOffset = 0;
     FILE *input_file;
     fopen_s(&input_file, PATH, "rb");
     if (input_file == nullptr) {
         cout << "fail to open file" << endl;
         exit(ERROR_FILE_NOT_FOUND);
     }
-//    bitstream.DataLength += fread(bitstream.Data + bitstream.DataLength, 1, bitstream.MaxLength - bitstream.DataLength,
-//                                  input_file);
+    bitstream.DataLength += fread(bitstream.Data + bitstream.DataLength, 1, bitstream.MaxLength - bitstream.DataLength,
+                                  input_file);
 
-    ReadEncodedStream(bitstream, input_file);
+//    ReadEncodedStream(bitstream, input_file);
+
 
     mfxVideoParam decodeParams = {};
     mfxVideoParam decodeVPPParams = {};
@@ -306,6 +311,7 @@ int main() {
 //    mfxSyncPoint syncPoint;
     bool isDraining = false;
     bool isStillGoing = true;
+    bool first = true;
     mfxStatus sts;
     mfxU32 framenum = 0;
     mfxFrameSurface1 *aSurf;
@@ -319,7 +325,7 @@ int main() {
         }
 
         sts = MFXVideoDECODE_VPP_DecodeFrameAsync(session,
-                                                  (isDraining) ? nullptr : &bitstream,
+                                                  (first) ? nullptr : &bitstream,
                                                   nullptr,
                                                   0,
                                                   &surface_out);
@@ -345,6 +351,11 @@ int main() {
 //                                sts = WriteRawFrame_InternalMem(aSurf, sinkDec);
 
                                 CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ));
+                                for (int j = 0; j < 10; ++j) {
+                                    cout << (int) aSurf->Data.R[j] << " " << (int) aSurf->Data.G[j] << " "
+                                         << (int) aSurf->Data.B[j] << " " << endl;
+                                }
+
                                 cout << "map" << endl;
                             }
                         }
@@ -373,6 +384,7 @@ int main() {
                 isStillGoing = false;
                 break;
         }
+        first = false;
     }
 
 
