@@ -2,11 +2,11 @@
 #include <vpl/mfx.h>
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
 #include "BitmapPlusPlus.hpp"
-#include <d3d11.h>
 //#include <sycl/CL/cl_d3d11.h>
 using namespace std;
-
+namespace fs = filesystem;
 
 void check(mfxStatus x, int LINE) {
     switch (x) {
@@ -119,16 +119,16 @@ void check(mfxStatus x, int LINE) {
             break;
     }
     if (x < 0) {
-        exit(x);
+        throw x;
+//        exit(x);
     }
 }
 
 #define CHECK(x) check(x,__LINE__)
 #define BITSTREAM_BUFFER_SIZE 2000000;
 #define ALIGN16(value) (((value + 15) >> 4) << 4)
-const char *PATH = R"(C:\Users\tomokazu\friends-4385686.jpg)";
 
-int main() {
+mfxSession *createSession() {
     auto loader = MFXLoad();
     auto cfg = MFXCreateConfig(loader);
     mfxVariant variant;
@@ -151,7 +151,7 @@ int main() {
                                      variant));
     mfxStatus iter;
     mfxImplDescription *implDesc;
-    mfxSession session;
+    auto *session = static_cast<mfxSession *>(malloc(sizeof(mfxSession)));
     int impl_idx = -1;
     for (int i = 0; iter = MFXEnumImplementations(loader, i,
                                                   mfxImplCapsDeliveryFormat::MFX_IMPLCAPS_IMPLDESCSTRUCTURE,
@@ -166,9 +166,9 @@ int main() {
                 cout << "Vendor ID: " << implDesc->Impl << endl;
 
 //                cout <<  << endl;
-                MFXCreateSession(loader, i, &session);
+                MFXCreateSession(loader, i, session);
                 mfxIMPL impl;
-                if (MFXQueryIMPL(session, &impl) == MFX_ERR_NONE) {
+                if (MFXQueryIMPL(*session, &impl) == MFX_ERR_NONE) {
                     switch (impl & 0x0f00) {
                         case MFX_IMPL_VIA_D3D11:
                             cout << "Impl: MFX_IMPL_VIA_D3D11" << endl;
@@ -189,32 +189,28 @@ int main() {
         cerr << "Cannot found suitable device." << endl;
         CHECK(MFX_ERR_NOT_FOUND);
     }
+    MFXUnload(loader);
+    return session;
+}
 
-    mfxHDL hdl;
-    MFXEnumImplementations(loader, impl_idx, mfxImplCapsDeliveryFormat::MFX_IMPLCAPS_IMPLEMENTEDFUNCTIONS, &hdl);
-//    auto *implementedFunctions = static_cast<mfxImplementedFunctions *>(hdl);
-//    std::for_each(implementedFunctions->FunctionsName,
-//                  implementedFunctions->FunctionsName + implementedFunctions->NumFunctions,
-//                  [](mfxChar *functionName) {
-//                      cout << "implemented: " << functionName << endl;
-//                  });
-    MFXDispReleaseImplDescription(loader, hdl);
 
+pair<pair<mfxU16, mfxU16>, mfxU8 *> decodeStream(mfxSession session, vector<char> data_stream) {
     mfxBitstream bitstream = {};
 
-    bitstream.MaxLength = BITSTREAM_BUFFER_SIZE;
+    bitstream.MaxLength = data_stream.size();
     bitstream.DataFlag = MFX_BITSTREAM_COMPLETE_FRAME;
     bitstream.Data = static_cast<mfxU8 *>(calloc(bitstream.MaxLength, sizeof(mfxU8)));
     bitstream.CodecId = MFX_CODEC_JPEG;
-    FILE *input_file;
-    fopen_s(&input_file, PATH, "rb");
-    if (input_file == nullptr) {
-        cout << "fail to open file" << endl;
-        exit(-1);
-    }
-    bitstream.DataLength += fread(bitstream.Data + bitstream.DataLength, 1, bitstream.MaxLength - bitstream.DataLength,
-                                  input_file);
-
+//    FILE *input_file;
+//    fopen_s(&input_file, R"(C:\Users\tomokazu\friends-4385686.jpg)", "rb");
+//    if (input_file == nullptr) {
+//        cout << "fail to open file" << endl;
+//        exit(-1);
+//    }
+//    bitstream.DataLength += fread(bitstream.Data + bitstream.DataLength, 1, bitstream.MaxLength - bitstream.DataLength,
+//                                  input_file);
+    bitstream.DataLength = data_stream.size();
+    copy(data_stream.begin(), data_stream.end(), bitstream.Data);
     mfxVideoParam decodeParams = {};
     mfxVideoParam decodeVPPParams = {};
     decodeParams.mfx.CodecId = MFX_CODEC_JPEG;
@@ -228,9 +224,13 @@ int main() {
     CHECK(MFXVideoDECODE_DecodeHeader(session, &bitstream, &decodeParams));
 //    CHECK(MFXVideoDECODE_VPP_DecodeHeader(session, &bitstream, &decodeVPPParams))
     auto *channelParam = static_cast<mfxVideoChannelParam *>(malloc(sizeof(mfxVideoChannelParam)));
+    if (channelParam == nullptr) {
+        CHECK(MFX_ERR_NULL_PTR);
+        exit(-1);
+    }
     memset(channelParam, 0, sizeof(mfxVideoChannelParam));
     channelParam->VPP.FourCC = MFX_FOURCC_RGB4;
-    channelParam->VPP.ChromaFormat = decodeParams.mfx.FrameInfo.ChromaFormat;
+//    channelParam->VPP.ChromaFormat = decodeParams.mfx.FrameInfo.ChromaFormat;
     channelParam->VPP.PicStruct = MFX_PICSTRUCT_PROGRESSIVE;
     channelParam->VPP.FrameRateExtN = decodeParams.mfx.FrameInfo.FrameRateExtN;
     channelParam->VPP.FrameRateExtD = decodeParams.mfx.FrameInfo.FrameRateExtD;
@@ -244,8 +244,14 @@ int main() {
     channelParam->ExtParam = nullptr;
     channelParam->NumExtParam = 0;
 
-
-    CHECK(MFXVideoDECODE_VPP_Init(session, &decodeParams, &channelParam, 1));
+    mfxStatus status;
+    switch (status = MFXVideoDECODE_VPP_Init(session, &decodeParams, &channelParam, 1)) {
+        case MFX_ERR_NONE:
+            break;
+        default:
+            MFXVideoDECODE_VPP_Close(session);
+            check(status, 248);
+    };
 
 //    CHECK(MFXVideoDECODE_Init(session, &decodeParams))
 
@@ -254,7 +260,7 @@ int main() {
     auto fourcc_str = ""s + (char) (fourcc & mask) + (char) ((fourcc & mask << 8) >> 8) +
                       (char) ((fourcc & mask << 16) >> 16) + (char) ((fourcc & mask << 24) >> 24);
     cout << "image format name: " << fourcc_str << endl;
-    if (fourcc != MFX_FOURCC_NV12)exit(-1);
+    if (fourcc != MFX_FOURCC_NV12)CHECK(MFX_ERR_NOT_IMPLEMENTED);
     mfxSurfaceArray *surface_out;
 //    mfxSyncPoint syncPoint;
 
@@ -279,9 +285,39 @@ int main() {
     fourcc_str = ""s + (char) (fourcc & mask) + (char) ((fourcc & mask << 8) >> 8) +
                  (char) ((fourcc & mask << 16) >> 16) + (char) ((fourcc & mask << 24) >> 24);
     cout << "image format name: " << fourcc_str << endl;
-    uint32_t file_size = 54 + w * h * 4;
-    MFXVideoVPP_Close(session);
+    auto *return_buff = static_cast<mfxU8 *>(malloc(sizeof(mfxU8) * w * h * 4));
+    for (int i = 0; i < h; ++i) {
+        memcpy(return_buff + 4 * w * i, data->B + pitch * i, w * 4);
+    }
+//    MFXVideoVPP_Close(session);
+    aSurf->FrameInterface->Release(aSurf);
+    free(bitstream.Data);
+    free(channelParam);
+    MFXVideoDECODE_VPP_Close(session);
+    return {{w, h}, return_buff};
 }
 
+int main() {
+//    string PATH = R"(C:\Users\tomokazu\friends-4385686.jpg)";
+    mfxSession *session = createSession();
 
+    auto dir_iterator = fs::directory_iterator(R"(C:\Users\tomokazu\CLionProjects\oneAPI_test\test_files)");
+    for (auto &path: dir_iterator) {
+        cout << path.path().string() << endl;
+
+        ifstream input_file(path.path().string(), ios::binary | ios::in);
+        if (!input_file) {
+            cerr << "failed to open file" << endl;
+        }
+        vector<char> data{istreambuf_iterator<char>(input_file), istreambuf_iterator<char>()};
+        try {
+            auto out = decodeStream(*session, data);
+        } catch (const mfxStatus) {
+            cout << "failed to decode :" << path.path().string() << endl;
+        }
+    }
+
+
+    free(session);
+}
 //https://github.com/intel/libvpl/blob/383b5caac6df614e76ade5a07c4f53be702e9176/examples/api2x/hello-decvpp/src/hello-decvpp.cpp

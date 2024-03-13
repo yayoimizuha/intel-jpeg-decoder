@@ -126,7 +126,7 @@ void check(mfxStatus x, int LINE) {
 #define CHECK(x) check(x,__LINE__)
 #define BITSTREAM_BUFFER_SIZE 2000000;
 #define ALIGN16(value) (((value + 15) >> 4) << 4)
-const char *PATH = R"(C:\Users\tomokazu\friends-4385686.jpg)";
+const char *PATH = R"(C:\Users\tomokazu\CLionProjects\oneAPI_test\test_files\12810158756-1.jpg)";
 
 int main() {
     auto loader = MFXLoad();
@@ -216,7 +216,7 @@ int main() {
                                   input_file);
 
     mfxVideoParam decodeParams = {};
-    mfxVideoParam decodeVPPParams = {};
+//    mfxVideoParam decodeVPPParams = {};
     decodeParams.mfx.CodecId = MFX_CODEC_JPEG;
     decodeParams.IOPattern = MFX_IOPATTERN_OUT_VIDEO_MEMORY;
 //    decodeParams.mfx.JPEGColorFormat = MFX_JPEG_COLORFORMAT_RGB;
@@ -226,11 +226,21 @@ int main() {
 //    decodeVPPParams.IOPattern = MFX_IOPATTERN_OUT_VIDEO_MEMORY;
 
     CHECK(MFXVideoDECODE_DecodeHeader(session, &bitstream, &decodeParams));
+
+
+    auto fourcc = decodeParams.mfx.FrameInfo.FourCC;
+    auto mask = 0xff;
+    auto fourcc_str = ""s + (char) (fourcc & mask) + (char) ((fourcc & mask << 8) >> 8) +
+                      (char) ((fourcc & mask << 16) >> 16) + (char) ((fourcc & mask << 24) >> 24);
+    cout << "image format name: " << fourcc_str << endl;
+    if (fourcc != MFX_FOURCC_NV12)exit(-1);
+
+
 //    CHECK(MFXVideoDECODE_VPP_DecodeHeader(session, &bitstream, &decodeVPPParams))
     auto *channelParam = static_cast<mfxVideoChannelParam *>(malloc(sizeof(mfxVideoChannelParam)));
     memset(channelParam, 0, sizeof(mfxVideoChannelParam));
     channelParam->VPP.FourCC = MFX_FOURCC_RGB4;
-    channelParam->VPP.ChromaFormat = decodeParams.mfx.FrameInfo.ChromaFormat;
+    channelParam->VPP.ChromaFormat = MFX_CHROMAFORMAT_YUV420;
     channelParam->VPP.PicStruct = MFX_PICSTRUCT_PROGRESSIVE;
     channelParam->VPP.FrameRateExtN = decodeParams.mfx.FrameInfo.FrameRateExtN;
     channelParam->VPP.FrameRateExtD = decodeParams.mfx.FrameInfo.FrameRateExtD;
@@ -248,13 +258,6 @@ int main() {
     CHECK(MFXVideoDECODE_VPP_Init(session, &decodeParams, &channelParam, 1));
 
 //    CHECK(MFXVideoDECODE_Init(session, &decodeParams))
-
-    auto fourcc = decodeParams.mfx.FrameInfo.FourCC;
-    auto mask = 0xff;
-    auto fourcc_str = ""s + (char) (fourcc & mask) + (char) ((fourcc & mask << 8) >> 8) +
-                      (char) ((fourcc & mask << 16) >> 16) + (char) ((fourcc & mask << 24) >> 24);
-    cout << "image format name: " << fourcc_str << endl;
-    if (fourcc != MFX_FOURCC_NV12)exit(-1);
     mfxSurfaceArray *surface_out;
 //    mfxSyncPoint syncPoint;
 
