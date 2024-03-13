@@ -16,6 +16,7 @@ add_executable(JPEG_DECODER_RGB dec_rgb.cpp)
 add_executable(JPEG_DECODER_RGB4 dec_rgb4.cpp)
 add_executable(example-hello-decode hello-decode.cpp)
 add_executable(example-hello-decvpp hello-decvpp.cpp)
+add_executable(qsv_jpeg_dec qsv_jpeg_dec.cpp)
 
 include_directories(${VPL_INCLUDE_DIR})
 
@@ -27,6 +28,7 @@ target_link_libraries(JPEG_DECODER_RGB ${VPL_LIB_DIR}/vpl.lib)
 target_link_libraries(JPEG_DECODER_RGB4 ${VPL_LIB_DIR}/vpl.lib)
 target_link_libraries(example-hello-decode ${VPL_LIB_DIR}/vpl.lib)
 target_link_libraries(example-hello-decvpp ${VPL_LIB_DIR}/vpl.lib)
+target_link_libraries(qsv_jpeg_dec ${VPL_LIB_DIR}/vpl.lib)
 #include(cmake/CPM.cmake)
 #
 #CPMAddPackage(

@@ -264,39 +264,6 @@ int main() {
     CHECK(surface_out->Surfaces[0]->FrameInterface->Synchronize(surface_out->Surfaces[0], 1000));
     CHECK(surface_out->Surfaces[0]->FrameInterface->Release(surface_out->Surfaces[0]));
     auto aSurf = surface_out->Surfaces[1];
-//    mfxHDL handle = nullptr;
-//    mfxResourceType resourceType;
-//    CHECK(aSurf->FrameInterface->GetNativeHandle(aSurf, &handle, &resourceType));
-//    auto *texture = static_cast<ID3D11Texture2D *>(handle);
-//    cout << "Resource type: ";
-//    switch (resourceType) {
-//        case MFX_RESOURCE_SYSTEM_SURFACE:
-//            cout << "MFX_RESOURCE_SYSTEM_SURFACE";
-//            break;
-//        case MFX_RESOURCE_VA_SURFACE_PTR:
-//            cout << "MFX_RESOURCE_VA_SURFACE_PTR";
-//            break;
-//        case MFX_RESOURCE_VA_BUFFER_PTR:
-//            cout << "MFX_RESOURCE_VA_BUFFER_PTR";
-//            break;
-//        case MFX_RESOURCE_DX9_SURFACE:
-//            cout << "MFX_RESOURCE_DX9_SURFACE";
-//            break;
-//        case MFX_RESOURCE_DX11_TEXTURE:
-//            cout << "MFX_RESOURCE_DX11_TEXTURE";
-//            break;
-//        case MFX_RESOURCE_DX12_RESOURCE:
-//            cout << "MFX_RESOURCE_DX12_RESOURCE";
-//            break;
-//        case MFX_RESOURCE_DMA_RESOURCE:
-//            cout << "MFX_RESOURCE_DMA_RESOURCE";
-//            break;
-//        case MFX_RESOURCE_HDDLUNITE_REMOTE_MEMORY:
-//            cout << "MFX_RESOURCE_HDDLUNITE_REMOTE_MEMORY";
-//            break;
-//    }
-//    cout << endl;
-//    cout << handle << endl;
     CHECK(aSurf->FrameInterface->Synchronize(aSurf, 1000));
     cout << (clock() - start) << "ms" << endl;
     CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ));
@@ -313,69 +280,6 @@ int main() {
                  (char) ((fourcc & mask << 16) >> 16) + (char) ((fourcc & mask << 24) >> 24);
     cout << "image format name: " << fourcc_str << endl;
     uint32_t file_size = 54 + w * h * 4;
-    auto *bitmap = static_cast<uint8_t *>(calloc(file_size, sizeof(uint8_t)));
-    auto rgb = fopen("rgb_bmp.bmp", "wb");
-//    struct BitmapFileHeader {
-//        uint16_t bfType;
-//        uint32_t bfSize;
-//        uint16_t bfReserved1;
-//        uint16_t bfReserved2;
-//        uint32_t bfOffBits;
-//    } header{};
-    BITMAPFILEHEADER header = {};
-//    struct BitmapInfoHeader {
-//        uint32_t biSize;
-//        int32_t biWidth;
-//        int32_t biHeight;
-//        uint16_t biPlanes;
-//        uint16_t biBitCount;
-//        uint32_t biCompression;
-//        uint32_t biSizeImage;
-//        int32_t biXPelsPerMeter;
-//        int32_t biYPelsPerMeter;
-//        uint32_t biClrUsed;
-//        uint32_t biClrImportant;
-//    } infoHeader{};
-    BITMAPINFOHEADER infoHeader = {};
-    memset(&header, '\0', sizeof(header));
-    memset(&infoHeader, '\0', sizeof(infoHeader));
-    memcpy(&header.bfType, "BM", 2);
-    header.bfSize = 0;
-    sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER) + w * h * 4;
-    header.bfOffBits = 0;
-    sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
-
-    infoHeader.biSize = 40;
-    infoHeader.biWidth = w;
-    infoHeader.biHeight = -h;
-    infoHeader.biPlanes = 1;
-    infoHeader.biBitCount = 32;
-    infoHeader.biCompression = 0;
-    infoHeader.biSizeImage = 0;
-    cout << sizeof(header) << endl;
-    cout << sizeof(infoHeader) << endl;
-    fwrite(&header, sizeof(header), 1, rgb);
-    fwrite(&infoHeader, sizeof(infoHeader), 1, rgb);
-    for (int i = 0; i < h; ++i) {
-        fwrite(data->B + i * pitch, sizeof(data->B[0]) * w * 4, 1, rgb);
-    }
-    fclose(rgb);
-
-
-
-    //    bmp::Bitmap img(w, h);
-//    for (int i = 0; i < h; ++i) {
-//        for (int j = 0; j < w; ++j) {
-//            bmp::Pixel pixel;
-//            pixel.r = *(data->R + i * pitch + 4 * j);
-//            pixel.g = *(data->G + i * pitch + 4 * j);
-//            pixel.b = *(data->B + i * pitch + 4 * j);
-//            img.set(j, i, pixel);
-//        }
-//
-//    }
-//    aSurf->FrameInterface->Release(aSurf);
-//    img.save("rgb.bmp");
     MFXVideoVPP_Close(session);
 }
 
