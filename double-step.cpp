@@ -126,22 +126,12 @@ void check(mfxStatus x, int LINE) {
 #define CHECK(x) check(x,__LINE__)
 #define BITSTREAM_BUFFER_SIZE 2000000;
 #define ALIGN16(value) (((value + 15) >> 4) << 4)
-const char *PATH = R"(C:\Users\tomokazu\friends-4385686.jpg)";
+const char *PATH = R"(C:\Users\tomokazu\CLionProjects\oneAPI_test\test_files\12810158756-1.jpg)";
 
-mfxStatus ReadEncodedStream(mfxBitstream &bs, FILE *f) {
-    printf("ReadEncodedStream\n");
-    cout << "offset: " << bs.DataOffset << endl;
-    cout << "length: " << bs.DataLength << endl;
-    memmove(bs.Data, bs.Data + bs.DataOffset, bs.DataLength);
-    bs.DataOffset = 0;
-    bs.DataLength += (mfxU32) fread(bs.Data + bs.DataLength, 1, bs.MaxLength - bs.DataLength, f);
-
-    cout << "offset: " << bs.DataOffset << endl;
-    cout << "length: " << bs.DataLength << endl;
-    if (bs.DataLength == 0)
-        return MFX_ERR_MORE_DATA;
-
-    return MFX_ERR_NONE;
+string fourcc_conv(mfxU32 fourcc) {
+    auto mask = 0xff;
+    return ""s + (char) (fourcc & mask) + (char) ((fourcc & mask << 8) >> 8) + (char) ((fourcc & mask << 16) >> 16) +
+           (char) ((fourcc & mask << 24) >> 24);
 }
 
 int main(int argc, char *argv[]) {
@@ -208,21 +198,7 @@ int main(int argc, char *argv[]) {
 
     mfxHDL hdl;
     MFXEnumImplementations(loader, impl_idx, mfxImplCapsDeliveryFormat::MFX_IMPLCAPS_IMPLEMENTEDFUNCTIONS, &hdl);
-//    auto *implementedFunctions = static_cast<mfxImplementedFunctions *>(hdl);
-//    std::for_each(implementedFunctions->FunctionsName,
-//                  implementedFunctions->FunctionsName + implementedFunctions->NumFunctions,
-//                  [](mfxChar *functionName) {
-//                      cout << "implemented: " << functionName << endl;
-//                  });
     MFXDispReleaseImplDescription(loader, hdl);
-
-
-//    mfxHDL hdl;
-    MFXEnumImplementations(loader, impl_idx, mfxImplCapsDeliveryFormat::MFX_IMPLCAPS_IMPLPATH, &hdl);
-//    auto *extendedDeviceID = static_cast<mfxExtendedDeviceId *>(hdl);
-    cout << "Driver PATH: " << reinterpret_cast<mfxChar *>(hdl) << endl;
-    MFXDispReleaseImplDescription(loader, hdl);
-
 
     mfxBitstream bitstream = {};
 
@@ -230,168 +206,141 @@ int main(int argc, char *argv[]) {
     bitstream.DataFlag = MFX_BITSTREAM_COMPLETE_FRAME;
     bitstream.Data = static_cast<mfxU8 *>(calloc(bitstream.MaxLength, sizeof(mfxU8)));
     bitstream.CodecId = MFX_CODEC_JPEG;
-    bitstream.DataOffset = 0;
-    if (argc == 1)exit(-1);
     FILE *input_file;
+    cout << "0: " << argv[0] << endl;
+    cout << "1: " << argv[1] << endl;
     fopen_s(&input_file, argv[1], "rb");
     if (input_file == nullptr) {
-        cout << "fail to open file: " << argv[1] << endl;
-        exit(ERROR_FILE_NOT_FOUND);
+        cout << "fail to open file" << endl;
+        exit(-1);
     }
-    cout << "open: " << argv[1] << endl;
     bitstream.DataLength += fread(bitstream.Data + bitstream.DataLength, 1, bitstream.MaxLength - bitstream.DataLength,
                                   input_file);
 
-//    ReadEncodedStream(bitstream, input_file);
-
-
     mfxVideoParam decodeParams = {};
-    mfxVideoParam decodeVPPParams = {};
+//    mfxVideoParam decodeVPPParams = {};
     decodeParams.mfx.CodecId = MFX_CODEC_JPEG;
+//    decodeParams.mfx.JPEGChromaFormat = MFX_CHROMAFORMAT_YUV420;
+    decodeParams.mfx.JPEGColorFormat = MFX_JPEG_COLORFORMAT_YCbCr;
+    decodeParams.mfx.JPEGChromaFormat = MFX_CHROMAFORMAT_YUV444;
     decodeParams.IOPattern = MFX_IOPATTERN_OUT_VIDEO_MEMORY;
-//    decodeParams.mfx.JPEGColorFormat = MFX_JPEG_COLORFORMAT_RGB;
-//    decodeParams.mfx.JPEGChromaFormat = MFX_CHROMAFORMAT_YUV444;
-
-//    decodeVPPParams.mfx.CodecId = MFX_CODEC_JPEG;
-//    decodeVPPParams.IOPattern = MFX_IOPATTERN_OUT_VIDEO_MEMORY;
-
     CHECK(MFXVideoDECODE_DecodeHeader(session, &bitstream, &decodeParams));
-//    CHECK(MFXVideoDECODE_VPP_DecodeHeader(session, &bitstream, &decodeVPPParams))
-    cout << "size of mfxVideoChannelParam: " << sizeof(mfxVideoChannelParam) << endl;
-    mfxVideoChannelParam **channelParam = nullptr;
-    channelParam = new mfxVideoChannelParam *[2];
-//    *channelParam = static_cast<mfxVideoChannelParam *>(calloc(2, sizeof(mfxVideoChannelParam)));
-    channelParam[0] = new mfxVideoChannelParam;
-    memset(channelParam[0], 0, sizeof(mfxVideoChannelParam));
-    channelParam[1] = new mfxVideoChannelParam;
-    memset(channelParam[1], 0, sizeof(mfxVideoChannelParam));
+
+
+    cout << "CropW: " << decodeParams.vpp.In.CropW << endl;
+    cout << "CropH: " << decodeParams.vpp.In.CropH << endl;
+    cout << "CropX: " << decodeParams.vpp.In.CropX << endl;
+    cout << "CropY: " << decodeParams.vpp.In.CropY << endl;
+    cout << "Width: " << decodeParams.vpp.In.Width << endl;
+    cout << "Height: " << decodeParams.vpp.In.Height << endl;
+//    cout << "BufferSize: " << decodeParams.vpp.In.BufferSize << endl;
+    cout << "ChromaFormat: " << decodeParams.vpp.Out.ChromaFormat << endl;
+    cout << "FourCC: " << decodeParams.vpp.In.FourCC << endl;
+    cout << "PicStruct: " << decodeParams.vpp.In.PicStruct << endl;
+
+
+    auto fourcc = fourcc_conv(decodeParams.mfx.FrameInfo.FourCC);
+
+    cout << "image format name: " << fourcc << endl;
+    if (decodeParams.mfx.FrameInfo.FourCC != MFX_FOURCC_NV12)exit(-1);
+
+
+    CHECK(MFXVideoDECODE_Init(session, &decodeParams));
+
+    mfxFrameSurface1 *surface_out;
+    mfxSyncPoint syncPoint;
+    cout << "start decode" << endl;
+
+
+    auto start = clock();
+    CHECK(MFXVideoDECODE_DecodeFrameAsync(session, &bitstream, nullptr, &surface_out, &syncPoint));
+    CHECK(surface_out->FrameInterface->Synchronize(surface_out, 1000));
+//    CHECK(surface_out->FrameInterface->Map(surface_out, MFX_MAP_READ));
+//    cout << surface_out->Info.CropH << endl;
+//    auto pitch = surface_out->Data.Pitch;
+//    auto w = decodeParams.vpp.In.CropW;
+//    auto h = decodeParams.vpp.In.CropH;
+//    auto data_size = sizeof(mfxU8) * (w * h + (w >> 1) * (h >> 1) + (w >> 1) * (h >> 1));
+//    auto raw_data = static_cast<mfxU8 *>(malloc(data_size));
+//    memcpy(raw_data, surface_out->Data.Y, data_size);
+//    CHECK(surface_out->FrameInterface->Unmap(surface_out));
+//    CHECK(surface_out->FrameInterface->Release(surface_out));
+//    CHECK(MFXVideoDECODE_Close(session));
+    mfxVideoParam VPPParams = {};
+    VPPParams.IOPattern = MFX_IOPATTERN_IN_VIDEO_MEMORY | MFX_IOPATTERN_OUT_VIDEO_MEMORY;
     {
-        channelParam[0]->VPP.FourCC = decodeParams.vpp.In.FourCC;
-        channelParam[0]->VPP.ChromaFormat = decodeParams.mfx.FrameInfo.ChromaFormat;
-        channelParam[0]->VPP.PicStruct = MFX_PICSTRUCT_PROGRESSIVE;
-        channelParam[0]->VPP.FrameRateExtN = decodeParams.mfx.FrameInfo.FrameRateExtN;
-        channelParam[0]->VPP.FrameRateExtD = decodeParams.mfx.FrameInfo.FrameRateExtD;
-        channelParam[0]->VPP.CropW = decodeParams.mfx.FrameInfo.CropW;
-        channelParam[0]->VPP.CropH = decodeParams.mfx.FrameInfo.CropH;
-        channelParam[0]->VPP.Width = ALIGN16(channelParam[0]->VPP.CropW);
-        channelParam[0]->VPP.Height = ALIGN16(channelParam[0]->VPP.CropH);
-        channelParam[0]->VPP.ChannelId = 1;
-        channelParam[0]->Protected = 0;
-        channelParam[0]->IOPattern = MFX_IOPATTERN_IN_VIDEO_MEMORY | MFX_IOPATTERN_OUT_VIDEO_MEMORY;
-        channelParam[0]->ExtParam = nullptr;
-        channelParam[0]->NumExtParam = 0;
-
-        channelParam[1]->VPP.FourCC = MFX_FOURCC_RGBP;
-        channelParam[1]->VPP.ChromaFormat = decodeParams.mfx.FrameInfo.ChromaFormat;
-        channelParam[1]->VPP.PicStruct = MFX_PICSTRUCT_PROGRESSIVE;
-        channelParam[1]->VPP.FrameRateExtN = decodeParams.mfx.FrameInfo.FrameRateExtN;
-        channelParam[1]->VPP.FrameRateExtD = decodeParams.mfx.FrameInfo.FrameRateExtD;
-        channelParam[1]->VPP.CropW = decodeParams.mfx.FrameInfo.CropW;
-        channelParam[1]->VPP.CropH = decodeParams.mfx.FrameInfo.CropH;
-        channelParam[1]->VPP.Width = ALIGN16(channelParam[1]->VPP.CropW);
-        channelParam[1]->VPP.Height = ALIGN16(channelParam[1]->VPP.CropH);
-        channelParam[1]->VPP.ChannelId = 2;
-        channelParam[1]->Protected = 0;
-        channelParam[1]->IOPattern = MFX_IOPATTERN_IN_VIDEO_MEMORY | MFX_IOPATTERN_OUT_VIDEO_MEMORY;
-        channelParam[1]->ExtParam = nullptr;
-        channelParam[1]->NumExtParam = 0;
+        VPPParams.vpp.In.FourCC = decodeParams.mfx.FrameInfo.FourCC;
+        VPPParams.vpp.In.ChromaFormat = decodeParams.mfx.FrameInfo.ChromaFormat;
+        VPPParams.vpp.In.CropX = decodeParams.vpp.In.CropX;
+        VPPParams.vpp.In.CropY = decodeParams.vpp.In.CropY;
+        VPPParams.vpp.In.CropW = decodeParams.vpp.In.CropW;
+        VPPParams.vpp.In.CropH = decodeParams.vpp.In.CropH;
+        VPPParams.vpp.In.PicStruct = MFX_PICSTRUCT_PROGRESSIVE;
+        VPPParams.vpp.In.FrameRateExtN = 30;
+        VPPParams.vpp.In.FrameRateExtD = 1;
+        VPPParams.vpp.In.Width = ALIGN16(VPPParams.vpp.In.CropW);
+        VPPParams.vpp.In.Height = ALIGN16(VPPParams.vpp.In.CropH);
+    }
+    {
+        VPPParams.vpp.Out.FourCC = MFX_FOURCC_BGRA;
+//        VPPParams.vpp.Out.ChromaFormat = MFX_CHROMAFORMAT_YUV444;
+        VPPParams.vpp.Out.CropX = decodeParams.vpp.In.CropX;
+        VPPParams.vpp.Out.CropY = decodeParams.vpp.In.CropY;
+        VPPParams.vpp.Out.CropW = ALIGN16(decodeParams.vpp.In.CropW);
+        VPPParams.vpp.Out.CropH = ALIGN16(decodeParams.vpp.In.CropH);
+        VPPParams.vpp.Out.PicStruct = MFX_PICSTRUCT_PROGRESSIVE;
+        VPPParams.vpp.Out.FrameRateExtN = 30;
+        VPPParams.vpp.Out.FrameRateExtD = 1;
+        VPPParams.vpp.Out.Width = ALIGN16(VPPParams.vpp.Out.CropW);
+        VPPParams.vpp.Out.Height = ALIGN16(VPPParams.vpp.Out.CropH);
+    }
+    CHECK(MFXVideoVPP_Init(session, &VPPParams));
+    mfxFrameSurface1 *surface_vpp_in, *surface_vpp_out = nullptr;
+    CHECK(MFXMemory_GetSurfaceForVPPIn(session, &surface_vpp_in));
+    CHECK(MFXMemory_GetSurfaceForVPPOut(session, &surface_vpp_out));
+    CHECK(surface_out->FrameInterface->Map(surface_out, MFX_MAP_READ));
+    CHECK(surface_vpp_in->FrameInterface->Map(surface_vpp_in, MFX_MAP_WRITE));
+    auto pitch = surface_out->Data.Pitch;
+    for (int h = 0; h < surface_out->Info.CropH; ++h) {
+        memcpy(surface_vpp_in->Data.Y + pitch * h, surface_out->Data.Y + pitch * h,
+               surface_out->Info.CropW);
     }
 
-    CHECK(MFXVideoDECODE_VPP_Init(session, &decodeParams, channelParam, 1));
-
-//    CHECK(MFXVideoDECODE_Init(session, &decodeParams))
-
-    auto fourcc = decodeParams.mfx.FrameInfo.FourCC;
-    auto mask = 0xff;
-    auto fourcc_str = ""s + (char) (fourcc & mask) + (char) ((fourcc & mask << 8) >> 8) +
-                      (char) ((fourcc & mask << 16) >> 16) + (char) ((fourcc & mask << 24) >> 24);
-    cout << "image format name: " << fourcc_str << endl;
-    if (fourcc != MFX_FOURCC_NV12) {
-        CHECK(MFX_ERR_UNSUPPORTED);
+    for (int h = 0; h < surface_out->Info.CropH / 2; ++h) {
+        memcpy(surface_vpp_in->Data.UV + pitch * h, surface_out->Data.UV + pitch * h,
+               surface_out->Info.CropW);
     }
-    mfxSurfaceArray *surface_out;
-//    mfxSyncPoint syncPoint;
-    bool isDraining = false;
-    bool isStillGoing = true;
-    bool first = true;
-    mfxStatus sts;
-    mfxU32 framenum = 0;
-    mfxFrameSurface1 *aSurf;
-    while (isStillGoing) {
-        // Load encoded stream if not draining
-        if (!isDraining) {
-            cout << "read stream " << endl;
-            sts = ReadEncodedStream(bitstream, input_file);
-            if (sts != MFX_ERR_NONE)
-                isDraining = true;
+
+//    for (int h = 0; h < surface_out->Info.CropH ; ++h) {
+//        memcpy(surface_vpp_in->Data.V + pitch * h, surface_out->Data.V + pitch * h,
+//               surface_out->Info.CropW);
+//    }
+    cout << "size: " << static_cast<int>(surface_out->Data.Pitch * surface_out->Info.Height * 1.5) << endl;
+    cout << "pitch: " << pitch << endl;
+
+    CHECK(surface_out->FrameInterface->Unmap(surface_out));
+    CHECK(surface_vpp_in->FrameInterface->Unmap(surface_vpp_in));
+
+
+    CHECK(MFXVideoVPP_RunFrameVPPAsync(session, surface_out, surface_vpp_out, nullptr, &syncPoint));
+    CHECK(surface_vpp_out->FrameInterface->Synchronize(surface_vpp_out, 1000));
+    CHECK(surface_vpp_out->FrameInterface->Map(surface_vpp_out, MFX_MAP_READ));
+    for (int i = 0; i < 10; ++i) {
+        printf("%#x\t", surface_vpp_out->Data.B[i]);
+    }
+
+    bmp::Bitmap save_image(VPPParams.vpp.Out.CropW, VPPParams.vpp.Out.CropH);
+    for (int h = 0; h < VPPParams.vpp.Out.CropH; ++h) {
+        for (int w = 0; w < VPPParams.vpp.Out.CropW; ++w) {
+            bmp::Pixel pixel;
+            pixel.r = *(surface_vpp_out->Data.R + surface_vpp_out->Data.Pitch * h + w * 4);
+            pixel.g = *(surface_vpp_out->Data.G + surface_vpp_out->Data.Pitch * h + w * 4);
+            pixel.b = *(surface_vpp_out->Data.B + surface_vpp_out->Data.Pitch * h + w * 4);
+            save_image.set(w, h, pixel);
         }
-
-        sts = MFXVideoDECODE_VPP_DecodeFrameAsync(session,
-                                                  (first) ? nullptr : &bitstream,
-                                                  nullptr,
-                                                  0,
-                                                  &surface_out);
-        cout << framenum << " :" << ((isDraining) ? "nullptr" : "&bitstream") << endl;
-
-        cout << "Async status: " << sts << endl;
-        switch (sts) {
-            case MFX_ERR_NONE:
-                // decode output
-                if (surface_out == nullptr) {
-                    printf("ERROR - empty array of surfaces.\n");
-                    isStillGoing = false;
-                    continue;
-                }
-
-                for (mfxU32 i = 0; i < surface_out->NumSurfaces; i++) {
-                    aSurf = surface_out->Surfaces[i];
-                    do {
-                        sts = aSurf->FrameInterface->Synchronize(aSurf, 1000);
-                        CHECK(sts);
-                        if (sts == MFX_ERR_NONE) {
-                            if (aSurf->Info.ChannelId == 0) { // decoder output
-//                                sts = WriteRawFrame_InternalMem(aSurf, sinkDec);
-
-                                CHECK(aSurf->FrameInterface->Map(aSurf, MFX_MAP_READ));
-                                for (int j = 0; j < 10; ++j) {
-                                    cout << (int) aSurf->Data.R[j] << " " << (int) aSurf->Data.G[j] << " "
-                                         << (int) aSurf->Data.B[j] << " " << endl;
-                                }
-
-                                cout << "map" << endl;
-                            }
-                        }
-                        if (sts != MFX_WRN_IN_EXECUTION) {
-                            sts = aSurf->FrameInterface->Release(aSurf);
-                            CHECK(sts);
-                        }
-
-                    } while (sts == MFX_WRN_IN_EXECUTION);
-                }
-                framenum++;
-
-                sts = surface_out->Release(surface_out);
-                CHECK(sts);
-                surface_out = nullptr;
-
-                break;
-
-            case MFX_ERR_MORE_DATA:
-                // The function requires more bitstream at input before decoding can proceed
-                if (isDraining)
-                    isStillGoing = false;
-                break;
-            default:
-                printf("unknown status %d\n", sts);
-                isStillGoing = false;
-                break;
-        }
-        first = false;
     }
+    save_image.save("double-step.bmp");
 
-
-
-//    auto aSurf = surface_out->Surfaces[2];
 }
 
 
