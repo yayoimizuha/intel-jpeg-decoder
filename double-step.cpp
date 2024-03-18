@@ -134,6 +134,28 @@ string fourcc_conv(mfxU32 fourcc) {
            (char) ((fourcc & mask << 24) >> 24);
 }
 
+inline unsigned char clip(float val) {
+    if (val < 0)val = 0;
+    if (val > 255)val = 255;
+    return static_cast<unsigned char>(val);
+}
+
+pair<mfxU16, mfxU16> size_from_header(mfxU8 *data, mfxU32 size) {
+    mfxU32 ptr = 0;
+    mfxU16 segment_size;
+    if (data[ptr] != 0xff || data[ptr + 1] != 0xd8)return {0, 0};
+    ptr += 2;
+    while (ptr <= size) {
+        if (data[ptr] == 0xff && (data[ptr + 1] & 0xf0) == 0xc0) {
+            return {(data[ptr + 5] << 8) + data[ptr + 6], (data[ptr + 7] << 8) + data[ptr + 8]};
+        }
+        segment_size = (data[ptr + 2] << 8) + data[ptr + 3];
+        ptr += segment_size + 2;
+    }
+    return {0, 0};
+}
+
+
 int main(int argc, char *argv[]) {
     auto loader = MFXLoad();
     auto cfg = MFXCreateConfig(loader);
@@ -217,26 +239,13 @@ int main(int argc, char *argv[]) {
     bitstream.DataLength += fread(bitstream.Data + bitstream.DataLength, 1, bitstream.MaxLength - bitstream.DataLength,
                                   input_file);
 
+    auto [height, width] = size_from_header(bitstream.Data, bitstream.DataLength);
+    cout << height << "x" << width << endl;
+
     mfxVideoParam decodeParams = {};
-//    mfxVideoParam decodeVPPParams = {};
     decodeParams.mfx.CodecId = MFX_CODEC_JPEG;
-//    decodeParams.mfx.JPEGChromaFormat = MFX_CHROMAFORMAT_YUV420;
-//    decodeParams.mfx.JPEGColorFormat = MFX_JPEG_COLORFORMAT_YCbCr;
-//    decodeParams.mfx.JPEGChromaFormat = MFX_CHROMAFORMAT_YUV444;
     decodeParams.IOPattern = MFX_IOPATTERN_OUT_VIDEO_MEMORY;
     CHECK(MFXVideoDECODE_DecodeHeader(session, &bitstream, &decodeParams));
-
-
-    cout << "CropW: " << decodeParams.vpp.In.CropW << endl;
-    cout << "CropH: " << decodeParams.vpp.In.CropH << endl;
-    cout << "CropX: " << decodeParams.vpp.In.CropX << endl;
-    cout << "CropY: " << decodeParams.vpp.In.CropY << endl;
-    cout << "Width: " << decodeParams.vpp.In.Width << endl;
-    cout << "Height: " << decodeParams.vpp.In.Height << endl;
-//    cout << "BufferSize: " << decodeParams.vpp.In.BufferSize << endl;
-    cout << "ChromaFormat: " << decodeParams.vpp.Out.ChromaFormat << endl;
-    cout << "FourCC: " << decodeParams.vpp.In.FourCC << endl;
-    cout << "PicStruct: " << decodeParams.vpp.In.PicStruct << endl;
 
 
     auto fourcc = fourcc_conv(decodeParams.mfx.FrameInfo.FourCC);
@@ -249,45 +258,44 @@ int main(int argc, char *argv[]) {
 
     mfxFrameSurface1 *surface_out;
     mfxSyncPoint syncPoint;
-    cout << "start decode" << endl;
+    cout << "start_conv_color decode" << endl;
 
 
-    auto start = clock();
+    auto start_jpeg_dec = clock();
     CHECK(MFXVideoDECODE_DecodeFrameAsync(session, &bitstream, nullptr, &surface_out, &syncPoint));
     CHECK(surface_out->FrameInterface->Synchronize(surface_out, 1000));
-//    CHECK(surface_out->FrameInterface->Map(surface_out, MFX_MAP_READ));
-//    cout << surface_out->Info.CropH << endl;
-//    auto pitch = surface_out->Data.Pitch;
-//    auto w = decodeParams.vpp.In.CropW;
-//    auto h = decodeParams.vpp.In.CropH;
-//    auto data_size = sizeof(mfxU8) * (w * h + (w >> 1) * (h >> 1) + (w >> 1) * (h >> 1));
-//    auto raw_data = static_cast<mfxU8 *>(malloc(data_size));
-//    memcpy(raw_data, surface_out->Data.Y, data_size);
-//    CHECK(surface_out->FrameInterface->Unmap(surface_out));
-//    CHECK(surface_out->FrameInterface->Release(surface_out));
-//    CHECK(MFXVideoDECODE_Close(session));
+    cout << "decode JPEG: " << clock() - start_jpeg_dec << "ms" << endl;
+
     CHECK(surface_out->FrameInterface->Map(surface_out, MFX_MAP_READ));
 
-
-    bmp::Bitmap save_image(surface_out->Info.CropW, surface_out->Info.CropH);
-    for (int h = 0; h < surface_out->Info.CropH; ++h) {
-        for (int w = 0; w < surface_out->Info.CropW; ++w) {
-            bmp::Pixel pixel;
-            auto Y = static_cast<float>((int) surface_out->Data.Y[surface_out->Data.Pitch * h + w]);
-            auto U = static_cast<float>((int) surface_out->Data.UV[surface_out->Data.Pitch * (h / 2) + (w / 2) * 2]);
-            auto V = static_cast<float>((int) surface_out->Data.UV[surface_out->Data.Pitch * (h / 2) + (w / 2) * 2 +
-                                                                   1]);
-            auto b = static_cast<unsigned char> (Y + 1.370705 * (V - 128));
-            auto r = static_cast<unsigned char>(Y - 0.698001 * (V - 128) - 0.337633 * (U - 128));
-            auto g = static_cast<unsigned char>(Y + 1.732446 * (U - 128));
-            pixel.r = r;
-            pixel.g = g;
-            pixel.b = b;
-
-            save_image.set(w, h, pixel);
+//    bmp::Bitmap save_image(surface_out->Info.CropW, surface_out->Info.CropH);
+    auto raw = static_cast<mfxU8 *>(malloc((width * height * 3) * sizeof(mfxU8)));
+    auto start_conv_color = clock();
+    for (int h = 0; h < height; ++h) {
+        for (int w = 0; w < width; ++w) {
+//            bmp::Pixel pixel;
+            auto Y = static_cast<float>((int)surface_out->Data.Y[surface_out->Data.Pitch * h + w]);
+            auto U = static_cast<float>((int)surface_out->Data.UV[surface_out->Data.Pitch * (h / 2) + (w / 2) * 2]);
+            auto V = static_cast<float>((int)surface_out->Data.UV[surface_out->Data.Pitch * (h / 2) + (w / 2) * 2 + 1]);
+            auto r = clip(1.164F * (Y - 16) + 1.596F * (V - 128));
+            auto g = clip(1.164F * (Y - 16) - 0.391F * (U - 128) - 0.813F * (V - 128));
+            auto b = clip(1.164F * (Y - 16) + 2.018F * (U - 128));
+            raw[(h * width + w) * 3] = r;
+            raw[(h * width + w) * 3 + 1] = g;
+            raw[(h * width + w) * 3 + 2] = b;
+//            pixel.r = r;
+//            pixel.g = g;
+//            pixel.b = b;
+//
+//            save_image.set(w, h, pixel);
         }
     }
-    save_image.save("double-step.bmp");
+    cout << "BT.601 to RGB: " << clock() - start_conv_color << "ms" << endl;
+    auto raw_file = fopen("double-step.raw", "wb");
+    if (raw_file == nullptr)exit(-1);
+    fwrite(raw, width * height * 3, 1, raw_file);
+    fclose(raw_file);
+//    save_image.save("double-step.bmp");
     CHECK(surface_out->FrameInterface->Unmap(surface_out));
 
 }
