@@ -273,12 +273,13 @@ int main(int argc, char *argv[]) {
     for (int h = 0; h < surface_out->Info.CropH; ++h) {
         for (int w = 0; w < surface_out->Info.CropW; ++w) {
             bmp::Pixel pixel;
-            auto Y = surface_out->Data.Y[surface_out->Data.Pitch * h + w];
-            auto UV = surface_out->Data.UV + surface_out->Data.Pitch * (h / 2) + (w & 0xff'fe);
-            auto b = static_cast<unsigned char> ((298 * (Y - 16) + 516 * (UV[0] - 128) + 128) >> 8);;
-            auto r = static_cast<unsigned char>((298 * (Y - 16) + 409 * (UV[1] - 128) + 128) >> 8);
-            auto g = static_cast<unsigned char>((298 * (Y - 16) - 100 * (UV[0] - 128) - 208 * (UV[1] - 128) + 128)
-                    >> 8);
+            auto Y = static_cast<float>((int) surface_out->Data.Y[surface_out->Data.Pitch * h + w]);
+            auto U = static_cast<float>((int) surface_out->Data.UV[surface_out->Data.Pitch * (h / 2) + (w / 2) * 2]);
+            auto V = static_cast<float>((int) surface_out->Data.UV[surface_out->Data.Pitch * (h / 2) + (w / 2) * 2 +
+                                                                   1]);
+            auto b = static_cast<unsigned char> (Y + 1.370705 * (V - 128));
+            auto r = static_cast<unsigned char>(Y - 0.698001 * (V - 128) - 0.337633 * (U - 128));
+            auto g = static_cast<unsigned char>(Y + 1.732446 * (U - 128));
             pixel.r = r;
             pixel.g = g;
             pixel.b = b;
