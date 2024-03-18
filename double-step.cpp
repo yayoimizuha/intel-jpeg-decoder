@@ -221,8 +221,8 @@ int main(int argc, char *argv[]) {
 //    mfxVideoParam decodeVPPParams = {};
     decodeParams.mfx.CodecId = MFX_CODEC_JPEG;
 //    decodeParams.mfx.JPEGChromaFormat = MFX_CHROMAFORMAT_YUV420;
-    decodeParams.mfx.JPEGColorFormat = MFX_JPEG_COLORFORMAT_YCbCr;
-    decodeParams.mfx.JPEGChromaFormat = MFX_CHROMAFORMAT_YUV444;
+//    decodeParams.mfx.JPEGColorFormat = MFX_JPEG_COLORFORMAT_YCbCr;
+//    decodeParams.mfx.JPEGChromaFormat = MFX_CHROMAFORMAT_YUV444;
     decodeParams.IOPattern = MFX_IOPATTERN_OUT_VIDEO_MEMORY;
     CHECK(MFXVideoDECODE_DecodeHeader(session, &bitstream, &decodeParams));
 
@@ -266,80 +266,28 @@ int main(int argc, char *argv[]) {
 //    CHECK(surface_out->FrameInterface->Unmap(surface_out));
 //    CHECK(surface_out->FrameInterface->Release(surface_out));
 //    CHECK(MFXVideoDECODE_Close(session));
-    mfxVideoParam VPPParams = {};
-    VPPParams.IOPattern = MFX_IOPATTERN_IN_VIDEO_MEMORY | MFX_IOPATTERN_OUT_VIDEO_MEMORY;
-    {
-        VPPParams.vpp.In.FourCC = decodeParams.mfx.FrameInfo.FourCC;
-        VPPParams.vpp.In.ChromaFormat = decodeParams.mfx.FrameInfo.ChromaFormat;
-        VPPParams.vpp.In.CropX = decodeParams.vpp.In.CropX;
-        VPPParams.vpp.In.CropY = decodeParams.vpp.In.CropY;
-        VPPParams.vpp.In.CropW = decodeParams.vpp.In.CropW;
-        VPPParams.vpp.In.CropH = decodeParams.vpp.In.CropH;
-        VPPParams.vpp.In.PicStruct = MFX_PICSTRUCT_PROGRESSIVE;
-        VPPParams.vpp.In.FrameRateExtN = 30;
-        VPPParams.vpp.In.FrameRateExtD = 1;
-        VPPParams.vpp.In.Width = ALIGN16(VPPParams.vpp.In.CropW);
-        VPPParams.vpp.In.Height = ALIGN16(VPPParams.vpp.In.CropH);
-    }
-    {
-        VPPParams.vpp.Out.FourCC = MFX_FOURCC_BGRA;
-//        VPPParams.vpp.Out.ChromaFormat = MFX_CHROMAFORMAT_YUV444;
-        VPPParams.vpp.Out.CropX = decodeParams.vpp.In.CropX;
-        VPPParams.vpp.Out.CropY = decodeParams.vpp.In.CropY;
-        VPPParams.vpp.Out.CropW = ALIGN16(decodeParams.vpp.In.CropW);
-        VPPParams.vpp.Out.CropH = ALIGN16(decodeParams.vpp.In.CropH);
-        VPPParams.vpp.Out.PicStruct = MFX_PICSTRUCT_PROGRESSIVE;
-        VPPParams.vpp.Out.FrameRateExtN = 30;
-        VPPParams.vpp.Out.FrameRateExtD = 1;
-        VPPParams.vpp.Out.Width = ALIGN16(VPPParams.vpp.Out.CropW);
-        VPPParams.vpp.Out.Height = ALIGN16(VPPParams.vpp.Out.CropH);
-    }
-    CHECK(MFXVideoVPP_Init(session, &VPPParams));
-    mfxFrameSurface1 *surface_vpp_in, *surface_vpp_out = nullptr;
-    CHECK(MFXMemory_GetSurfaceForVPPIn(session, &surface_vpp_in));
-    CHECK(MFXMemory_GetSurfaceForVPPOut(session, &surface_vpp_out));
     CHECK(surface_out->FrameInterface->Map(surface_out, MFX_MAP_READ));
-    CHECK(surface_vpp_in->FrameInterface->Map(surface_vpp_in, MFX_MAP_WRITE));
-    auto pitch = surface_out->Data.Pitch;
+
+
+    bmp::Bitmap save_image(surface_out->Info.CropW, surface_out->Info.CropH);
     for (int h = 0; h < surface_out->Info.CropH; ++h) {
-        memcpy(surface_vpp_in->Data.Y + pitch * h, surface_out->Data.Y + pitch * h,
-               surface_out->Info.CropW);
-    }
-
-    for (int h = 0; h < surface_out->Info.CropH / 2; ++h) {
-        memcpy(surface_vpp_in->Data.UV + pitch * h, surface_out->Data.UV + pitch * h,
-               surface_out->Info.CropW);
-    }
-
-//    for (int h = 0; h < surface_out->Info.CropH ; ++h) {
-//        memcpy(surface_vpp_in->Data.V + pitch * h, surface_out->Data.V + pitch * h,
-//               surface_out->Info.CropW);
-//    }
-    cout << "size: " << static_cast<int>(surface_out->Data.Pitch * surface_out->Info.Height * 1.5) << endl;
-    cout << "pitch: " << pitch << endl;
-
-    CHECK(surface_out->FrameInterface->Unmap(surface_out));
-    CHECK(surface_vpp_in->FrameInterface->Unmap(surface_vpp_in));
-
-
-    CHECK(MFXVideoVPP_RunFrameVPPAsync(session, surface_out, surface_vpp_out, nullptr, &syncPoint));
-    CHECK(surface_vpp_out->FrameInterface->Synchronize(surface_vpp_out, 1000));
-    CHECK(surface_vpp_out->FrameInterface->Map(surface_vpp_out, MFX_MAP_READ));
-    for (int i = 0; i < 10; ++i) {
-        printf("%#x\t", surface_vpp_out->Data.B[i]);
-    }
-
-    bmp::Bitmap save_image(VPPParams.vpp.Out.CropW, VPPParams.vpp.Out.CropH);
-    for (int h = 0; h < VPPParams.vpp.Out.CropH; ++h) {
-        for (int w = 0; w < VPPParams.vpp.Out.CropW; ++w) {
+        for (int w = 0; w < surface_out->Info.CropW; ++w) {
             bmp::Pixel pixel;
-            pixel.r = *(surface_vpp_out->Data.R + surface_vpp_out->Data.Pitch * h + w * 4);
-            pixel.g = *(surface_vpp_out->Data.G + surface_vpp_out->Data.Pitch * h + w * 4);
-            pixel.b = *(surface_vpp_out->Data.B + surface_vpp_out->Data.Pitch * h + w * 4);
+            auto Y = surface_out->Data.Y[surface_out->Data.Pitch * h + w];
+            auto UV = surface_out->Data.UV + surface_out->Data.Pitch * (h / 2) + (w & 0xff'fe);
+            auto b = static_cast<unsigned char> ((298 * (Y - 16) + 516 * (UV[0] - 128) + 128) >> 8);;
+            auto r = static_cast<unsigned char>((298 * (Y - 16) + 409 * (UV[1] - 128) + 128) >> 8);
+            auto g = static_cast<unsigned char>((298 * (Y - 16) - 100 * (UV[0] - 128) - 208 * (UV[1] - 128) + 128)
+                    >> 8);
+            pixel.r = r;
+            pixel.g = g;
+            pixel.b = b;
+
             save_image.set(w, h, pixel);
         }
     }
     save_image.save("double-step.bmp");
+    CHECK(surface_out->FrameInterface->Unmap(surface_out));
 
 }
 
