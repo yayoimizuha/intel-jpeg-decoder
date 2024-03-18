@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cstring>
 #include "BitmapPlusPlus.hpp"
-#include <d3d11.h>
+#include <sycl/sycl.hpp>
 //#include <sycl/CL/cl_d3d11.h>
 using namespace std;
 
@@ -297,6 +297,7 @@ int main(int argc, char *argv[]) {
     if (raw_file == nullptr)exit(-1);
     fwrite(raw, width * height * 3, 1, raw_file);
     fclose(raw_file);
+    
 //    save_image.save("double-step.bmp");
     CHECK(surface_out->FrameInterface->Unmap(surface_out));
     CHECK(surface_out->FrameInterface->Release(surface_out));

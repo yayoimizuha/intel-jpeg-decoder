@@ -4,7 +4,10 @@
 #include <cstring>
 #include "BitmapPlusPlus.hpp"
 #include <d3d11.h>
-//#include <sycl/CL/cl_d3d11.h>
+#include <dxgi1_6.h>
+#include <DirectXTex.h>
+#include <wincodec.h>
+
 using namespace std;
 
 
@@ -266,39 +269,115 @@ int main(int argc, char *argv[]) {
     CHECK(surface_out->FrameInterface->Synchronize(surface_out, 1000));
     cout << "decode JPEG: " << clock() - start_jpeg_dec << "ms" << endl;
 
-    CHECK(surface_out->FrameInterface->Map(surface_out, MFX_MAP_READ));
 
-//    bmp::Bitmap save_image(surface_out->Info.CropW, surface_out->Info.CropH);
-    auto raw = static_cast<mfxU8 *>(malloc((width * height * 3) * sizeof(mfxU8)));
-    auto data = surface_out->Data;
-    auto pitch = data.Pitch;
-    auto start_conv_color = clock();
-    for (int h = 0; h < height; ++h) {
-        for (int w = 0; w < width; ++w) {
-//            bmp::Pixel pixel;
-            auto Y = static_cast<float>(*(data.Y + pitch * h + w));
-            auto U = static_cast<float>(*(data.UV + pitch * (h / 2) + (w / 2) * 2));
-            auto V = static_cast<float>(*(data.UV + pitch * (h / 2) + (w / 2) * 2 + 1));
-            auto r = clip(1.164F * (Y - 16) + 1.596F * (V - 128));
-            auto g = clip(1.164F * (Y - 16) - 0.391F * (U - 128) - 0.813F * (V - 128));
-            auto b = clip(1.164F * (Y - 16) + 2.018F * (U - 128));
-            raw[(h * width + w) * 3] = r;
-            raw[(h * width + w) * 3 + 1] = g;
-            raw[(h * width + w) * 3 + 2] = b;
-//            pixel.r = r;
-//            pixel.g = g;
-//            pixel.b = b;
-//
-//            save_image.set(w, h, pixel);
-        }
+//    CHECK(surface_out->FrameInterface->Map(surface_out, MFX_MAP_READ));
+    mfxHDL nativeHandle = nullptr;
+    mfxResourceType nativeResourceType = {};
+    CHECK(surface_out->FrameInterface->GetNativeHandle(surface_out, &nativeHandle, &nativeResourceType));
+    cout << "Native handle type: ";
+    switch (nativeResourceType) {
+        case MFX_RESOURCE_SYSTEM_SURFACE:
+            cout << "MFX_RESOURCE_SYSTEM_SURFACE" << endl;
+            break;
+        case MFX_RESOURCE_VA_SURFACE_PTR:
+            cout << "MFX_RESOURCE_VA_SURFACE_PTR" << endl;
+            break;
+        case MFX_RESOURCE_VA_BUFFER_PTR:
+            cout << "MFX_RESOURCE_VA_BUFFER_PTR" << endl;
+            break;
+        case MFX_RESOURCE_DX9_SURFACE:
+            cout << "MFX_RESOURCE_DX9_SURFACE" << endl;
+            break;
+        case MFX_RESOURCE_DX11_TEXTURE:
+            cout << "MFX_RESOURCE_DX11_TEXTURE" << endl;
+            break;
+        case MFX_RESOURCE_DX12_RESOURCE:
+            cout << "MFX_RESOURCE_DX12_RESOURCE" << endl;
+            break;
+        case MFX_RESOURCE_DMA_RESOURCE:
+            cout << "MFX_RESOURCE_DMA_RESOURCE" << endl;
+            break;
+        case MFX_RESOURCE_HDDLUNITE_REMOTE_MEMORY:
+            cout << "MFX_RESOURCE_HDDLUNITE_REMOTE_MEMORY" << endl;
+            break;
     }
-    cout << "BT.601 to RGB: " << clock() - start_conv_color << "ms" << endl;
-    auto raw_file = fopen("double-step.raw", "wb");
-    if (raw_file == nullptr)exit(-1);
-    fwrite(raw, width * height * 3, 1, raw_file);
-    fclose(raw_file);
-//    save_image.save("double-step.bmp");
-    CHECK(surface_out->FrameInterface->Unmap(surface_out));
+    auto *pDXTexture = reinterpret_cast<ID3D11Texture2D *>(nativeHandle);
+    D3D11_TEXTURE2D_DESC texDesc = {};
+    pDXTexture->GetDesc(&texDesc);
+    cout << "  Width              =" << texDesc.Width << endl;
+    cout << "  Height             =" << texDesc.Height << endl;
+    cout << "  MipLevels          =" << texDesc.MipLevels << endl;
+    cout << "  ArraySize          =" << texDesc.ArraySize << endl;
+    cout << "  Format             =" << texDesc.Format << endl;
+    cout << "  SampleDesc.Count   =" << texDesc.SampleDesc.Count << endl;
+    cout << "  SampleDesc.Quality =" << texDesc.SampleDesc.Quality << endl;
+    cout << std::hex << std::showbase;
+    cout << "  Usage              =" << texDesc.Usage << endl;
+    cout << "  BindFlags          =" << texDesc.BindFlags << endl;
+    cout << "  CPUAccessFlags     =" << texDesc.CPUAccessFlags << endl;
+    cout << "  MiscFlags          =" << texDesc.MiscFlags << endl;
+    cout << std::dec << endl;
+    mfxHDL deviceHandle = nullptr;
+    mfxHandleType deviceHandleType = {};
+    CHECK(surface_out->FrameInterface->GetDeviceHandle(surface_out, &deviceHandle, &deviceHandleType));
+    cout << "Device handle type: ";
+    switch (deviceHandleType) {
+        case MFX_HANDLE_DIRECT3D_DEVICE_MANAGER9:
+            cout << "MFX_HANDLE_DIRECT3D_DEVICE_MANAGER9" << endl;
+            break;
+        case MFX_HANDLE_RESERVED1:
+            cout << "MFX_HANDLE_RESERVED1" << endl;
+            break;
+        case MFX_HANDLE_D3D11_DEVICE:
+            cout << "MFX_HANDLE_D3D11_DEVICE" << endl;
+            break;
+        case MFX_HANDLE_VA_DISPLAY:
+            cout << "MFX_HANDLE_VA_DISPLAY" << endl;
+            break;
+        case MFX_HANDLE_RESERVED3:
+            cout << "MFX_HANDLE_RESERVED3" << endl;
+            break;
+        case MFX_HANDLE_VA_CONFIG_ID:
+            cout << "MFX_HANDLE_VA_CONFIG_ID" << endl;
+            break;
+        case MFX_HANDLE_VA_CONTEXT_ID:
+            cout << "MFX_HANDLE_VA_CONTEXT_ID" << endl;
+            break;
+        case MFX_HANDLE_CM_DEVICE:
+            cout << "MFX_HANDLE_CM_DEVICE" << endl;
+            break;
+        case MFX_HANDLE_HDDLUNITE_WORKLOADCONTEXT:
+            cout << "MFX_HANDLE_HDDLUNITE_WORKLOADCONTEXT" << endl;
+            break;
+        case MFX_HANDLE_PXP_CONTEXT:
+            cout << "MFX_HANDLE_PXP_CONTEXT" << endl;
+            break;
+    }
+    auto *pDXDevice = reinterpret_cast<ID3D11Device *>(deviceHandle);
+    ID3D11Texture2D *renderTexture = nullptr;
+    texDesc.MiscFlags = D3D10_RESOURCE_MISC_SHARED;
+    auto hr = pDXDevice->CreateTexture2D(&texDesc, nullptr, &renderTexture);
+    ID3D11DeviceContext *pDXDeviceContext;
+    hr = pDXDevice->CreateDeferredContext(0, &pDXDeviceContext);
+    pDXDeviceContext->CopyResource(renderTexture, pDXTexture);
+    IDXGIResource1 *pDXGIResource = nullptr;
+
+    hr = renderTexture->QueryInterface(__uuidof(IDXGIResource1), (void **) &pDXGIResource);
+//    HANDLE *pSharedHandle = nullptr;
+//    hr = pDXGIResource->CreateSharedHandle(nullptr, DXGI_SHARED_RESOURCE_READ, nullptr, pSharedHandle);
+    DirectX::ScratchImage srcImage, rgbImage;
+    DirectX::CaptureTexture(pDXDevice, pDXDeviceContext, renderTexture, srcImage);
+    DirectX::Convert(srcImage.GetImages(), srcImage.GetImageCount(), srcImage.GetMetadata(),
+                     DXGI_FORMAT::DXGI_FORMAT_R8G8B8A8_UNORM, DirectX::TEX_FILTER_FLAGS::TEX_FILTER_DEFAULT, 0.0f,
+                     rgbImage);
+    CoInitialize(nullptr);
+    DirectX::SaveToWICFile(*rgbImage.GetImage(0, 0, 0), DirectX::WIC_FLAGS::WIC_FLAGS_NONE,
+                           GUID_ContainerFormatBmp, L"texture.bmp", &GUID_WICPixelFormat24bppRGB);
+
+    pDXGIResource->Release();
+
+
+    //    CHECK(surface_out->FrameInterface->Unmap(surface_out));
     CHECK(surface_out->FrameInterface->Release(surface_out));
     CHECK(MFXVideoDECODE_Close(session));
 

@@ -11,6 +11,9 @@ message("VPL_LIB_DIR: " ${VPL_LIB_DIR})
 message("VPL_BIN_DIR: " ${VPL_BIN_DIR})
 message("VPL_INCLUDE_DIR: " ${VPL_INCLUDE_DIR})
 
+link_directories($ENV{LD_LIBRARY_PATH})
+
+
 add_executable(JPEG_DECODER main.cpp)
 add_executable(JPEG_DECODER_RGB dec_rgb.cpp)
 add_executable(JPEG_DECODER_RGB4 dec_rgb4.cpp)
@@ -18,10 +21,10 @@ add_executable(example-hello-decode hello-decode.cpp)
 add_executable(example-hello-decvpp hello-decvpp.cpp)
 add_executable(qsv_jpeg_dec qsv_jpeg_dec.cpp)
 add_executable(double-step double-step.cpp)
+add_executable(double-step-sycl double-step-sycl.cpp)
+add_executable(directx_test directx_test.cpp)
 
 include_directories(${VPL_INCLUDE_DIR})
-
-link_directories(${VPL_SHLIB_DIR})
 
 
 target_link_libraries(JPEG_DECODER ${VPL_LIB_DIR}/vpl.lib)
@@ -31,6 +34,9 @@ target_link_libraries(example-hello-decode ${VPL_LIB_DIR}/vpl.lib)
 target_link_libraries(example-hello-decvpp ${VPL_LIB_DIR}/vpl.lib)
 target_link_libraries(qsv_jpeg_dec ${VPL_LIB_DIR}/vpl.lib)
 target_link_libraries(double-step ${VPL_LIB_DIR}/vpl.lib)
+target_link_libraries(directx_test ${VPL_LIB_DIR}/vpl.lib)
+target_link_libraries(directx_test DirectXTex.lib)
+target_link_libraries(double-step-sycl ${VPL_LIB_DIR}/vpl.lib)
 #include(cmake/CPM.cmake)
 #
 #CPMAddPackage(
