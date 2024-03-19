@@ -165,11 +165,18 @@ int main(int argc, char *argv[]) {
     CHECK(MFXSetConfigFilterProperty(cfg, reinterpret_cast<const mfxU8 *>("mfxImplDescription.Impl"), variant));
     variant.Type = MFX_VARIANT_TYPE_U32;
 #ifdef WIN32
+    cout << "Select: MFX_ACCEL_MODE_VIA_D3D11" << endl;
+    variant.Data.U32 = MFX_ACCEL_MODE_VIA_D3D11;
+#elifdef _WIN32
+    cout << "Select: MFX_ACCEL_MODE_VIA_D3D11" << endl;
     variant.Data.U32 = MFX_ACCEL_MODE_VIA_D3D11;
 #elifdef __linux__
+    cout << "Select: MFX_ACCEL_MODE_VIA_VAAPI" << endl;
     variant.Data.U32 = MFX_ACCEL_MODE_VIA_VAAPI;
-#elifndef
+#else
+    cout << "Select: MFX_ACCEL_MODE_NA" << endl;
     variant.Data.U32 = MFX_ACCEL_MODE_NA;
+
 #endif
     CHECK(MFXSetConfigFilterProperty(cfg, reinterpret_cast<const mfxU8 *>("mfxImplDescription.AccelerationMode"),
                                      variant));
@@ -229,6 +236,7 @@ int main(int argc, char *argv[]) {
     bitstream.Data = static_cast<mfxU8 *>(calloc(bitstream.MaxLength, sizeof(mfxU8)));
     bitstream.CodecId = MFX_CODEC_JPEG;
     FILE *input_file;
+    if (argc < 2)exit(-1);
     cout << "0: " << argv[0] << endl;
     cout << "1: " << argv[1] << endl;
     fopen_s(&input_file, argv[1], "rb");
@@ -301,17 +309,62 @@ int main(int argc, char *argv[]) {
     sycl::queue syclQueue(syclDevice);
     cout << "SYCL Device name: " << syclDevice.get_info<sycl::info::device::name>() << endl;
     cout << "SYCL Device vendor: " << syclDevice.get_info<sycl::info::device::vendor>() << endl;
-    syclQueue.submit([&](sycl::handler &syclHandler) {
-        syclHandler.parallel_for(sycl::range<1>(width * height), [=](sycl::id<1> i) {
-
+    auto *sycl_Y = sycl::malloc_device<mfxU8>(pitch * height, syclQueue);
+//    sycl::buffer<mfxU8, 1> bufY{surface_out->Data.Y, sycl::range<1>(pitch * height)};
+    syclQueue.memcpy(sycl_Y, surface_out->Data.Y, pitch * height);
+    auto *sycl_UV = sycl::malloc_device<mfxU8>(pitch * (height / 2), syclQueue);
+//    sycl::buffer<mfxU8, 1> bufUV{surface_out->Data.UV, sycl::range<1>(pitch * (height / 2))};
+    syclQueue.memcpy(sycl_UV, surface_out->Data.UV, pitch * (height / 2));
+    auto *sycl_RGB = sycl::malloc_device<mfxU8>(width * height * 3, syclQueue);
+//    vector<mfxU8> syclDestRGB(width * height * 3, 0);
+//    sycl::buffer<mfxU8, 1> bufRGB{syclDestRGB.data(), sycl::range<1>(syclDestRGB.size())};
+    cout << "begin color conversion..." << endl;
+    auto start_color_conv = clock();
+    try {
+        syclQueue.submit([&](sycl::handler &syclHandler) {
+//            auto Y = bufY.template get_access<sycl::access::mode::read>(syclHandler);
+//            auto UV = bufUV.template get_access<sycl::access::mode::read>(syclHandler);
+//            auto RGB = bufRGB.template get_access<sycl::access::mode::write>(syclHandler);
+            syclHandler.parallel_for(sycl::range<1>(width * height), [=](sycl::id<1> i) {
+                auto h = i / (mfxU32) width;
+                auto w = i % (mfxU32) width;
+                auto U_ptr = pitch * (h / 2) + (w / 2) * 2;
+                auto Y = static_cast<float>(sycl_Y[pitch * h + w]);
+                auto U = static_cast<float>(sycl_UV[U_ptr]);
+                auto V = static_cast<float>(sycl_UV[U_ptr + 1]);
+                auto r = 1.164F * (Y - 16.0F) + 1.596F * (V - 128.0F);
+                auto g = 1.164F * (Y - 16.0F) - 0.391F * (U - 128.0F) - 0.813F * (V - 128.0F);
+                auto b = 1.164F * (Y - 16.0F) + 2.018F * (U - 128.0F);
+                sycl_RGB[i * 3 + 0] = static_cast<mfxU8>(min(255.0F, max(.0F, r)));
+                sycl_RGB[i * 3 + 1] = static_cast<mfxU8>(min(255.0F, max(.0F, g)));
+                sycl_RGB[i * 3 + 2] = static_cast<mfxU8>(min(255.0F, max(.0F, b)));
+//                RGB[i[0] * 3 + 0] = 0;
+//                RGB[i[0] * 3 + 1] = 0;
+//                RGB[i[0] * 3 + 2] = 0;
+            });
         });
-    });
+        syclQueue.wait();
+//        cout << "end color conversion..." << endl;
+    } catch (sycl::exception &exception) {
+        cerr << exception.what() << endl;
+        return -1;
+    }
+    cout << clock() - start_color_conv << "ms" << endl;
+
+    auto hostRGB = static_cast<mfxU8 *>(malloc(height * width * 3));
+    syclQueue.memcpy(hostRGB, sycl_RGB, height * width * 3);
+    auto sycl_raw_file = fopen("double-step-sycl.raw", "wb");
+    if (sycl_raw_file == nullptr) {
+        cerr << "failed to open: double-step-sycl.raw" << endl;
+        exit(-1);
+    }
+    fwrite(hostRGB, width * height * 3, 1, sycl_raw_file);
+    fclose(sycl_raw_file);
 
 //    save_image.save("double-step.bmp");
     CHECK(surface_out->FrameInterface->Unmap(surface_out));
     CHECK(surface_out->FrameInterface->Release(surface_out));
     CHECK(MFXVideoDECODE_Close(session));
-
 }
 
 
