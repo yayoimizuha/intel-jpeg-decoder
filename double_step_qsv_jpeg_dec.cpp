@@ -2,11 +2,13 @@
 #include <vpl/mfx.h>
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
 #include "BitmapPlusPlus.hpp"
 #include <sycl/sycl.hpp>
 
 using namespace std;
-
+using namespace chrono;
+namespace fs = filesystem;
 
 void check(mfxStatus x, int LINE) {
     switch (x) {
@@ -119,25 +121,9 @@ void check(mfxStatus x, int LINE) {
             break;
     }
     if (x < 0) {
-        exit(x);
+        throw x;
+//        exit(x);
     }
-}
-
-#define CHECK(x) check(x,__LINE__)
-#define BITSTREAM_BUFFER_SIZE 2000000;
-#define ALIGN16(value) (((value + 15) >> 4) << 4)
-const char *PATH = R"(C:\Users\tomokazu\CLionProjects\oneAPI_test\test_files\12810158756-1.jpg)";
-
-string fourcc_conv(mfxU32 fourcc) {
-    auto mask = 0xff;
-    return ""s + (char) (fourcc & mask) + (char) ((fourcc & mask << 8) >> 8) + (char) ((fourcc & mask << 16) >> 16) +
-           (char) ((fourcc & mask << 24) >> 24);
-}
-
-inline unsigned char clip(float val) {
-    if (val < 0)val = 0;
-    if (val > 255)val = 255;
-    return static_cast<unsigned char>(val);
 }
 
 pair<mfxU16, mfxU16> size_from_header(mfxU8 *data, mfxU32 size) {
@@ -145,7 +131,7 @@ pair<mfxU16, mfxU16> size_from_header(mfxU8 *data, mfxU32 size) {
     mfxU16 segment_size;
     if (data[ptr] != 0xff || data[ptr + 1] != 0xd8)return {0, 0};
     ptr += 2;
-    while (ptr <= size) {
+    while (ptr < size) {
         if (data[ptr] == 0xff && (data[ptr + 1] & 0xf0) == 0xc0) {
             return {(data[ptr + 5] << 8) + data[ptr + 6], (data[ptr + 7] << 8) + data[ptr + 8]};
         }
@@ -155,8 +141,11 @@ pair<mfxU16, mfxU16> size_from_header(mfxU8 *data, mfxU32 size) {
     return {0, 0};
 }
 
+#define CHECK(x) check(x,__LINE__)
+#define BITSTREAM_BUFFER_SIZE 2000000;
+#define ALIGN16(value) (((value + 15) >> 4) << 4)
 
-int main(int argc, char *argv[]) {
+mfxSession *createSession() {
     auto loader = MFXLoad();
     auto cfg = MFXCreateConfig(loader);
     mfxVariant variant;
@@ -165,15 +154,11 @@ int main(int argc, char *argv[]) {
     CHECK(MFXSetConfigFilterProperty(cfg, reinterpret_cast<const mfxU8 *>("mfxImplDescription.Impl"), variant));
     variant.Type = MFX_VARIANT_TYPE_U32;
 #ifdef _WIN32
-    cout << "Select: MFX_ACCEL_MODE_VIA_D3D11" << endl;
     variant.Data.U32 = MFX_ACCEL_MODE_VIA_D3D11;
 #elifdef __linux__
-    cout << "Select: MFX_ACCEL_MODE_VIA_VAAPI" << endl;
     variant.Data.U32 = MFX_ACCEL_MODE_VIA_VAAPI;
 #else
-    cout << "Select: MFX_ACCEL_MODE_NA" << endl;
     variant.Data.U32 = MFX_ACCEL_MODE_NA;
-
 #endif
     CHECK(MFXSetConfigFilterProperty(cfg, reinterpret_cast<const mfxU8 *>("mfxImplDescription.AccelerationMode"),
                                      variant));
@@ -183,7 +168,7 @@ int main(int argc, char *argv[]) {
                                      variant));
     mfxStatus iter;
     mfxImplDescription *implDesc;
-    mfxSession session;
+    auto *session = static_cast<mfxSession *>(malloc(sizeof(mfxSession)));
     int impl_idx = -1;
     for (int i = 0; iter = MFXEnumImplementations(loader, i,
                                                   mfxImplCapsDeliveryFormat::MFX_IMPLCAPS_IMPLDESCSTRUCTURE,
@@ -198,9 +183,9 @@ int main(int argc, char *argv[]) {
                 cout << "Vendor ID: " << implDesc->Impl << endl;
 
 //                cout <<  << endl;
-                MFXCreateSession(loader, i, &session);
+                MFXCreateSession(loader, i, session);
                 mfxIMPL impl;
-                if (MFXQueryIMPL(session, &impl) == MFX_ERR_NONE) {
+                if (MFXQueryIMPL(*session, &impl) == MFX_ERR_NONE) {
                     switch (impl & 0x0f00) {
                         case MFX_IMPL_VIA_D3D11:
                             cout << "Impl: MFX_IMPL_VIA_D3D11" << endl;
@@ -221,72 +206,68 @@ int main(int argc, char *argv[]) {
         cerr << "Cannot found suitable device." << endl;
         CHECK(MFX_ERR_NOT_FOUND);
     }
+    MFXUnload(loader);
+    return session;
+}
 
-    mfxHDL hdl;
-    MFXEnumImplementations(loader, impl_idx, mfxImplCapsDeliveryFormat::MFX_IMPLCAPS_IMPLEMENTEDFUNCTIONS, &hdl);
-    MFXDispReleaseImplDescription(loader, hdl);
+sycl::queue createSYCLQueue() {
+    auto syclDevice = sycl::device(sycl::gpu_selector_v);
+    sycl::queue syclQueue(syclDevice);
+    cout << "SYCL Device name: " << syclDevice.get_info<sycl::info::device::name>() << endl;
+    cout << "SYCL Device vendor: " << syclDevice.get_info<sycl::info::device::vendor>() << endl;
+    return syclQueue;
+}
 
+pair<pair<mfxU16, mfxU16>, mfxU8 *> decodeStream(mfxSession session, vector<char> data_stream, sycl::queue syclQueue) {
     mfxBitstream bitstream = {};
 
-    bitstream.MaxLength = BITSTREAM_BUFFER_SIZE;
+    bitstream.MaxLength = data_stream.size() + 100;
     bitstream.DataFlag = MFX_BITSTREAM_COMPLETE_FRAME;
     bitstream.Data = static_cast<mfxU8 *>(calloc(bitstream.MaxLength, sizeof(mfxU8)));
     bitstream.CodecId = MFX_CODEC_JPEG;
-    FILE *input_file;
-    if (argc < 2)exit(-1);
-    cout << "0: " << argv[0] << endl;
-    cout << "1: " << argv[1] << endl;
-    fopen_s(&input_file, argv[1], "rb");
-    if (input_file == nullptr) {
-        cout << "fail to open file" << endl;
-        exit(-1);
-    }
-    bitstream.DataLength += fread(bitstream.Data + bitstream.DataLength, 1, bitstream.MaxLength - bitstream.DataLength,
-                                  input_file);
 
-    auto [height, width] = size_from_header(bitstream.Data, bitstream.DataLength);
-    cout << height << "x" << width << endl;
-
+    bitstream.DataLength = data_stream.size();
+    copy(data_stream.begin(), data_stream.end(), bitstream.Data);
     mfxVideoParam decodeParams = {};
+
     decodeParams.mfx.CodecId = MFX_CODEC_JPEG;
     decodeParams.IOPattern = MFX_IOPATTERN_OUT_VIDEO_MEMORY;
+
+    auto [height, width] = size_from_header(bitstream.Data, bitstream.DataLength);
+
     CHECK(MFXVideoDECODE_DecodeHeader(session, &bitstream, &decodeParams));
 
 
-    auto fourcc = fourcc_conv(decodeParams.mfx.FrameInfo.FourCC);
+    mfxStatus status;
+    switch (status = MFXVideoDECODE_Init(session, &decodeParams)) {
+        case MFX_ERR_NONE:
+            break;
+        default:
+            MFXVideoDECODE_Close(session);
+            check(status, 241);
+    };
 
-    cout << "image format name: " << fourcc << endl;
-    if (decodeParams.mfx.FrameInfo.FourCC != MFX_FOURCC_NV12)exit(-1);
-
-
-    CHECK(MFXVideoDECODE_Init(session, &decodeParams));
 
     mfxFrameSurface1 *surface_out;
     mfxSyncPoint syncPoint;
-    cout << "start_conv_color decode" << endl;
 
-
-    auto start_jpeg_dec = clock();
+    auto start_jpeg_dec = system_clock::now();
     CHECK(MFXVideoDECODE_DecodeFrameAsync(session, &bitstream, nullptr, &surface_out, &syncPoint));
     CHECK(surface_out->FrameInterface->Synchronize(surface_out, 1000));
-    cout << "decode JPEG: " << clock() - start_jpeg_dec << "ms" << endl;
+    cout << "decode JPEG: " << duration_cast<microseconds>((system_clock::now() - start_jpeg_dec)).count() << "us" << endl;
 
     CHECK(surface_out->FrameInterface->Map(surface_out, MFX_MAP_READ));
 
 
     auto data = surface_out->Data;
     auto pitch = data.Pitch;
-    auto syclDevice = sycl::device(sycl::gpu_selector_v);
-    sycl::queue syclQueue(syclDevice);
-    cout << "SYCL Device name: " << syclDevice.get_info<sycl::info::device::name>() << endl;
-    cout << "SYCL Device vendor: " << syclDevice.get_info<sycl::info::device::vendor>() << endl;
     auto *sycl_Y = sycl::malloc_device<mfxU8>(pitch * height, syclQueue);
     syclQueue.memcpy(sycl_Y, data.Y, pitch * height).wait();
     auto *sycl_UV = sycl::malloc_device<mfxU8>(pitch * (height / 2), syclQueue);
     syclQueue.memcpy(sycl_UV, data.UV, pitch * (height / 2)).wait();
     auto *sycl_RGB = sycl::malloc_device<mfxU8>(width * height * 3, syclQueue);
-    cout << "begin color conversion..." << endl;
-    auto start_color_conv = clock();
+//    cout << "begin color conversion..." << endl;
+    auto start_color_conv = system_clock::now();
     try {
         syclQueue.submit([&](sycl::handler &syclHandler) {
             syclHandler.parallel_for<class ColorConversion>(sycl::range<1>(width * height), [=](sycl::id<1> i) {
@@ -305,33 +286,46 @@ int main(int argc, char *argv[]) {
             });
         });
         syclQueue.wait();
-        cout << "end color conversion..." << endl;
     } catch (sycl::exception &exception) {
         cerr << exception.what() << endl;
-        return -1;
+        return {{width, height}, nullptr};
     }
-    cout << clock() - start_color_conv << "ms" << endl;
+    cout << "end color conversion in " << duration_cast<microseconds>((system_clock::now() - start_color_conv)).count() << "us" << endl;
 
     auto hostRGB = static_cast<mfxU8 *>(malloc(height * width * 3));
     syclQueue.memcpy(hostRGB, sycl_RGB, height * width * 3).wait();
     sycl::free(sycl_Y, syclQueue);
     sycl::free(sycl_UV, syclQueue);
     sycl::free(sycl_RGB, syclQueue);
-    auto sycl_raw_file = fopen("double-step-sycl.raw", "wb");
-    if (sycl_raw_file == nullptr) {
-        cerr << "failed to open: double-step-sycl.raw" << endl;
-        exit(-1);
-    }
-    fwrite(hostRGB, width * height * 3, 1, sycl_raw_file);
-    fclose(sycl_raw_file);
-    free(hostRGB);
-
-
-//    save_image.save("double-step.bmp");
-    CHECK(surface_out->FrameInterface->Unmap(surface_out));
-    CHECK(surface_out->FrameInterface->Release(surface_out));
-    CHECK(MFXVideoDECODE_Close(session));
+    MFXVideoDECODE_Close(session);
+    free(bitstream.Data);
+    return {{width, height}, hostRGB};
 }
 
+int main() {
+//    string PATH = R"(C:\Users\tomokazu\friends-4385686.jpg)";
+    auto *session = createSession();
+    auto queue = createSYCLQueue();
 
+    auto dir_iterator = fs::directory_iterator(R"(C:\Users\tomokazu\CLionProjects\intel-jpeg-decoder\test_files)");
+    for (auto &path: dir_iterator) {
+        cout << path.path().string() << endl;
+
+        ifstream input_file(path.path().string(), ios::binary | ios::in);
+        if (!input_file) {
+            cerr << "failed to open file" << endl;
+        }
+        vector<char> data{istreambuf_iterator<char>(input_file), istreambuf_iterator<char>()};
+        try {
+            auto out = decodeStream(*session, data, queue);
+            free(out.second);
+        } catch (exception &e) {
+            cout << "failed to decode :" << path.path().string() << "by" << e.what() << endl;
+        }
+
+    }
+
+
+    free(session);
+}
 //https://github.com/intel/libvpl/blob/383b5caac6df614e76ade5a07c4f53be702e9176/examples/api2x/hello-decvpp/src/hello-decvpp.cpp

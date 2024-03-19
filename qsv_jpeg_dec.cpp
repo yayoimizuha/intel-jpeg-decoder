@@ -136,11 +136,11 @@ mfxSession *createSession() {
     variant.Data.U32 = MFX_IMPL_TYPE_HARDWARE;
     CHECK(MFXSetConfigFilterProperty(cfg, reinterpret_cast<const mfxU8 *>("mfxImplDescription.Impl"), variant));
     variant.Type = MFX_VARIANT_TYPE_U32;
-#ifdef WIN32
+#ifdef _WIN32
     variant.Data.U32 = MFX_ACCEL_MODE_VIA_D3D11;
 #elifdef __linux__
     variant.Data.U32 = MFX_ACCEL_MODE_VIA_VAAPI;
-#elifndef
+#else
     variant.Data.U32 = MFX_ACCEL_MODE_NA;
 #endif
     CHECK(MFXSetConfigFilterProperty(cfg, reinterpret_cast<const mfxU8 *>("mfxImplDescription.AccelerationMode"),
@@ -301,7 +301,7 @@ int main() {
 //    string PATH = R"(C:\Users\tomokazu\friends-4385686.jpg)";
     mfxSession *session = createSession();
 
-    auto dir_iterator = fs::directory_iterator(R"(C:\Users\tomokazu\CLionProjects\oneAPI_test\test_files)");
+    auto dir_iterator = fs::directory_iterator(R"(C:\Users\tomokazu\CLionProjects\intel-jpeg-decoder\test_files)");
     for (auto &path: dir_iterator) {
         cout << path.path().string() << endl;
 
