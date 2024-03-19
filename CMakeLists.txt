@@ -13,6 +13,8 @@ message("VPL_INCLUDE_DIR: " ${VPL_INCLUDE_DIR})
 
 link_directories($ENV{LD_LIBRARY_PATH})
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl")
+
 
 add_executable(JPEG_DECODER main.cpp)
 add_executable(JPEG_DECODER_RGB dec_rgb.cpp)

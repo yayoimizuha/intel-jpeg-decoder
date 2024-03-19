@@ -4,7 +4,7 @@
 #include <cstring>
 #include "BitmapPlusPlus.hpp"
 #include <sycl/sycl.hpp>
-//#include <sycl/CL/cl_d3d11.h>
+
 using namespace std;
 
 
@@ -297,7 +297,16 @@ int main(int argc, char *argv[]) {
     if (raw_file == nullptr)exit(-1);
     fwrite(raw, width * height * 3, 1, raw_file);
     fclose(raw_file);
-    
+    auto syclDevice = sycl::device(sycl::gpu_selector_v);
+    sycl::queue syclQueue(syclDevice);
+    cout << "SYCL Device name: " << syclDevice.get_info<sycl::info::device::name>() << endl;
+    cout << "SYCL Device vendor: " << syclDevice.get_info<sycl::info::device::vendor>() << endl;
+    syclQueue.submit([&](sycl::handler &syclHandler) {
+        syclHandler.parallel_for(sycl::range<1>(width * height), [=](sycl::id<1> i) {
+
+        });
+    });
+
 //    save_image.save("double-step.bmp");
     CHECK(surface_out->FrameInterface->Unmap(surface_out));
     CHECK(surface_out->FrameInterface->Release(surface_out));
