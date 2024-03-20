@@ -121,8 +121,7 @@ void check(mfxStatus x, int LINE) {
             break;
     }
     if (x < 0) {
-        throw x;
-//        exit(x);
+        exit(x);
     }
 }
 
