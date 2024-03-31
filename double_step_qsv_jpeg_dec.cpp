@@ -1,9 +1,7 @@
 #include <iostream>
 #include <vpl/mfx.h>
 #include <algorithm>
-#include <cstring>
 #include <filesystem>
-#include "BitmapPlusPlus.hpp"
 #include <sycl/sycl.hpp>
 
 
@@ -220,15 +218,22 @@ sycl::queue *createSYCLQueue() {
 
 sycl::queue *syclQueue = nullptr;
 mfxSession *session = nullptr;
+
 struct decodeInput {
     size_t size;
     mfxU8 *data;
+    void *metadata;
 };
 struct decodeOutput {
     size_t width;
     size_t height;
     mfxU8 *data;
+    void *metadata;
 };
+
+extern "C" {
+decodeOutput decodeStream(decodeInput data_stream);
+}
 
 decodeOutput decodeStream(decodeInput data_stream) {
     mfxBitstream bitstream = {};
@@ -281,13 +286,19 @@ decodeOutput decodeStream(decodeInput data_stream) {
     auto *sycl_UV = sycl::malloc_device<mfxU8>(pitch * (height / 2), *syclQueue);
     syclQueue->memcpy(sycl_UV, data.UV, pitch * (height / 2)).wait();
     auto *sycl_RGB = sycl::malloc_device<mfxU8>(width * height * 3, *syclQueue);
+    auto *sycl_WidthHeight = sycl::malloc_device<mfxU16>(2, *syclQueue);
+    syclQueue->memcpy(sycl_WidthHeight, &width, sizeof(mfxU16));
+    syclQueue->memcpy(sycl_WidthHeight + sizeof(mfxU16), &height, sizeof(mfxU16));
 //    cout << "begin color conversion..." << endl;
     auto start_color_conv = system_clock::now();
     try {
         syclQueue->submit([&](sycl::handler &syclHandler) {
-            syclHandler.parallel_for<class ColorConversion>(sycl::range<1>(width * height), [=](sycl::id<1> i) {
-                auto h = i / width;
-                auto w = i % width;
+            auto syclWidth = sycl_WidthHeight[0];
+            auto syclHeight = sycl_WidthHeight[1];
+            syclHandler.parallel_for<class ColorConversion>(sycl::range<1>(
+                    syclWidth * syclHeight), [=](sycl::id<1> i) {
+                auto h = i / syclWidth;
+                auto w = i % syclWidth;
                 auto U_ptr = pitch * (h / 2) + (w / 2) * 2;
                 auto Y = static_cast<float>(sycl_Y[pitch * h + w]);
                 auto U = static_cast<float>(sycl_UV[U_ptr]);
@@ -315,40 +326,11 @@ decodeOutput decodeStream(decodeInput data_stream) {
     sycl::free(sycl_RGB, *syclQueue);
     MFXVideoDECODE_Close(*session);
     free(bitstream.Data);
-//    vector<mfxU8> return_buff(hostRGB, hostRGB + height * width * 3L);
     decodeOutput output{
             width,
             height,
-            hostRGB
+            hostRGB,
+            data_stream.metadata
     };
     return output;
 }
-
-int main() {
-//    string PATH = R"(C:\Users\tomokazu\friends-4385686.jpg)";
-//    auto *session = createSession();
-    auto queue = createSYCLQueue();
-
-    auto dir_iterator = fs::directory_iterator(R"(C:\Users\tomokazu\CLionProjects\intel-jpeg-decoder\test_files)");
-    for (auto &path: dir_iterator) {
-        cout << path.path().string() << endl;
-
-        ifstream input_file(path.path().string(), ios::binary | ios::in);
-        if (!input_file) {
-            cerr << "failed to open file" << endl;
-        }
-        vector<mfxU8> data{istreambuf_iterator<char>(input_file), istreambuf_iterator<char>()};
-        try {
-            decodeInput input{data.size(), data.data()};
-            auto out = decodeStream(input);
-            free(out.data);
-        } catch (exception &e) {
-            cout << "failed to decode :" << path.path().string() << "by" << e.what() << endl;
-        }
-
-    }
-
-
-    free(session);
-}
-//https://github.com/intel/libvpl/blob/383b5caac6df614e76ade5a07c4f53be702e9176/examples/api2x/hello-decvpp/src/hello-decvpp.cpp
