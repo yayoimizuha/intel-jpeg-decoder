@@ -241,6 +241,7 @@ int main(int argc, char *argv[]) {
         cout << "fail to open file" << endl;
         exit(-1);
     }
+    bitstream.DataLength = 0;
     bitstream.DataLength += fread(bitstream.Data + bitstream.DataLength, 1, bitstream.MaxLength - bitstream.DataLength,
                                   input_file);
 

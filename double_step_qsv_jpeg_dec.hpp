@@ -135,7 +135,7 @@ pair<mfxU16, mfxU16> size_from_header(mfxU8 *data, mfxU32 size) {
 }
 
 #define CHECK(x) check(x,__LINE__)
-#define BITSTREAM_BUFFER_SIZE 2000000;
+#define BITSTREAM_BUFFER_SIZE 2000000
 #define ALIGN16(value) (((value + 15) >> 4) << 4)
 
 mfxSession *createSession() {
@@ -278,19 +278,21 @@ decodeOutput decodeStream(decodeInput data_stream) {
     auto *sycl_UV = sycl::malloc_device<mfxU8>(pitch * (height / 2), *syclQueue);
     syclQueue->memcpy(sycl_UV, data.UV, pitch * (height / 2)).wait();
     auto *sycl_RGB = sycl::malloc_device<mfxU8>(width * height * 3, *syclQueue);
-    auto *sycl_WidthHeight = sycl::malloc_device<mfxU16>(2, *syclQueue);
-    syclQueue->memcpy(sycl_WidthHeight, &width, sizeof(mfxU16));
-    syclQueue->memcpy(sycl_WidthHeight + sizeof(mfxU16), &height, sizeof(mfxU16));
+    auto *sycl_WidthPitch = sycl::malloc_device<mfxU16>(10, *syclQueue);
+    unsigned short WidthPitch[2] = {width, pitch};
+    syclQueue->memcpy(sycl_WidthPitch, WidthPitch, 2).wait();
 //    cout << "begin color conversion..." << endl;
     auto start_color_conv = system_clock::now();
+//    constexpr sycl::specialization_id<pair<mfxU16, mfxU16>> size_pair;
+    sycl::range<1> range{static_cast<size_t>(width * height)};
     try {
         syclQueue->submit([&](sycl::handler &syclHandler) {
-            auto syclWidth = sycl_WidthHeight[0];
-            auto syclHeight = sycl_WidthHeight[1];
             syclHandler.parallel_for<class ColorConversion>(
-                    sycl::range < 1 > (syclWidth * syclHeight), [=](sycl::id<1> i) {
-                        auto h = i / syclWidth;
-                        auto w = i % syclWidth;
+                    range, [=](sycl::id<1> i) {
+//                        auto syclWidth = sycl_WidthPitch[0];
+//                        auto syclPitch = sycl_WidthPitch[1];
+                        auto h = i / width;
+                        auto w = i % width;
                         auto U_ptr = pitch * (h / 2) + (w / 2) * 2;
                         auto Y = static_cast<float>(sycl_Y[pitch * h + w]);
                         auto U = static_cast<float>(sycl_UV[U_ptr]);
@@ -308,7 +310,7 @@ decodeOutput decodeStream(decodeInput data_stream) {
         cerr << exception.what() << endl;
         return {0, 0, nullptr};
     }
-    sycl::free(sycl_WidthHeight, *syclQueue);
+    sycl::free(sycl_WidthPitch, *syclQueue);
     cout << "end color conversion in " << duration_cast<microseconds>((system_clock::now() - start_color_conv)).count()
          << "us" << endl;
 
