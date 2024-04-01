@@ -239,6 +239,7 @@ decodeOutput decodeStream(decodeInput data_stream) {
     bitstream.DataLength = data_stream.size;
     memcpy(bitstream.Data, data_stream.data, data_stream.size);
     free(data_stream.data);
+//    data_stream.data = nullptr;
     mfxVideoParam decodeParams = {};
 
     decodeParams.mfx.CodecId = MFX_CODEC_JPEG;
@@ -289,20 +290,22 @@ decodeOutput decodeStream(decodeInput data_stream) {
         syclQueue->submit([&](sycl::handler &syclHandler) {
             syclHandler.parallel_for<class ColorConversion>(
                     range, [=](sycl::id<1> i) {
-//                        auto syclWidth = sycl_WidthPitch[0];
-//                        auto syclPitch = sycl_WidthPitch[1];
                         auto h = i / width;
                         auto w = i % width;
                         auto U_ptr = pitch * (h / 2) + (w / 2) * 2;
-                        auto Y = static_cast<float>(sycl_Y[pitch * h + w]);
-                        auto U = static_cast<float>(sycl_UV[U_ptr]);
-                        auto V = static_cast<float>(sycl_UV[U_ptr + 1]);
-                        auto r = 1.164F * (Y - 16.0F) + 1.596F * (V - 128.0F);
-                        auto g = 1.164F * (Y - 16.0F) - 0.391F * (U - 128.0F) - 0.813F * (V - 128.0F);
-                        auto b = 1.164F * (Y - 16.0F) + 2.018F * (U - 128.0F);
-                        sycl_RGB[i * 3 + 0] = static_cast<mfxU8>(min(255.0F, max(.0F, r)));
-                        sycl_RGB[i * 3 + 1] = static_cast<mfxU8>(min(255.0F, max(.0F, g)));
-                        sycl_RGB[i * 3 + 2] = static_cast<mfxU8>(min(255.0F, max(.0F, b)));
+                        auto Y = static_cast<sycl::half>(sycl_Y[pitch * h + w]);
+                        auto U = static_cast<sycl::half>(sycl_UV[U_ptr]);
+                        auto V = static_cast<sycl::half>(sycl_UV[U_ptr + 1]);
+                        auto r = sycl::half(1.164) * (Y - sycl::half(16.0)) +
+                                 sycl::half(1.596) * (V - (sycl::half(128.0)));
+                        auto g = sycl::half(1.164) * (Y - sycl::half(16.0)) -
+                                 sycl::half(0.391) * (U - sycl::half(128.0)) -
+                                 sycl::half(0.813) * (V - sycl::half(128.0));
+                        auto b = sycl::half(1.164) * (Y - sycl::half(16.0)) +
+                                 sycl::half(2.018) * (U - sycl::half(128.0));
+                        sycl_RGB[i * 3 + 0] = static_cast<mfxU8>(min(sycl::half(255.0), max(sycl::half(0), r)));
+                        sycl_RGB[i * 3 + 1] = static_cast<mfxU8>(min(sycl::half(255.0), max(sycl::half(0), g)));
+                        sycl_RGB[i * 3 + 2] = static_cast<mfxU8>(min(sycl::half(255.0), max(sycl::half(0), b)));
                     });
         });
         syclQueue->wait();

@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
         for (auto &pic_file: fs::directory_iterator(members_dir)) {
             cout << pic_file << endl;
             const auto file_size = pic_file.file_size();
-            auto file_buf = static_cast<uint8_t *>(malloc(sizeof(uint8_t) * file_size));
+            auto file_buf = static_cast<uint8_t *>(calloc(file_size, sizeof(uint8_t)));
             if (file_buf == nullptr) {
                 cerr << "failed to allocate memory: " << pic_file.path() << endl;
             }
