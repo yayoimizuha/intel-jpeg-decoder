@@ -2,7 +2,7 @@
 #include <iostream>
 #include <filesystem>
 #include <fstream>
-#include "double_step_qsv_jpeg_dec.cpp"
+#include "double_step_qsv_jpeg_dec.hpp"
 using namespace std;
 namespace fs = filesystem;
 

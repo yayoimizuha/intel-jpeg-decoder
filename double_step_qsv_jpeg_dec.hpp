@@ -1,13 +1,8 @@
-#include <iostream>
 #include <vpl/mfx.h>
-#include <algorithm>
-#include <filesystem>
 #include <sycl/sycl.hpp>
-
 
 using namespace std;
 using namespace chrono;
-namespace fs = filesystem;
 
 void check(mfxStatus x, int LINE) {
     switch (x) {
@@ -231,22 +226,19 @@ struct decodeOutput {
     void *metadata;
 };
 
-extern "C" {
-decodeOutput decodeStream(decodeInput data_stream);
-}
-
 decodeOutput decodeStream(decodeInput data_stream) {
     mfxBitstream bitstream = {};
     if (syclQueue == nullptr)syclQueue = createSYCLQueue();
     if (session == nullptr)session = createSession();
 
-    bitstream.MaxLength = data_stream.size + 100;
+    bitstream.MaxLength = BITSTREAM_BUFFER_SIZE;
     bitstream.DataFlag = MFX_BITSTREAM_COMPLETE_FRAME;
     bitstream.Data = static_cast<mfxU8 *>(calloc(bitstream.MaxLength, sizeof(mfxU8)));
     bitstream.CodecId = MFX_CODEC_JPEG;
 
     bitstream.DataLength = data_stream.size;
     memcpy(bitstream.Data, data_stream.data, data_stream.size);
+    free(data_stream.data);
     mfxVideoParam decodeParams = {};
 
     decodeParams.mfx.CodecId = MFX_CODEC_JPEG;
@@ -295,27 +287,28 @@ decodeOutput decodeStream(decodeInput data_stream) {
         syclQueue->submit([&](sycl::handler &syclHandler) {
             auto syclWidth = sycl_WidthHeight[0];
             auto syclHeight = sycl_WidthHeight[1];
-            syclHandler.parallel_for<class ColorConversion>(sycl::range<1>(
-                    syclWidth * syclHeight), [=](sycl::id<1> i) {
-                auto h = i / syclWidth;
-                auto w = i % syclWidth;
-                auto U_ptr = pitch * (h / 2) + (w / 2) * 2;
-                auto Y = static_cast<float>(sycl_Y[pitch * h + w]);
-                auto U = static_cast<float>(sycl_UV[U_ptr]);
-                auto V = static_cast<float>(sycl_UV[U_ptr + 1]);
-                auto r = 1.164F * (Y - 16.0F) + 1.596F * (V - 128.0F);
-                auto g = 1.164F * (Y - 16.0F) - 0.391F * (U - 128.0F) - 0.813F * (V - 128.0F);
-                auto b = 1.164F * (Y - 16.0F) + 2.018F * (U - 128.0F);
-                sycl_RGB[i * 3 + 0] = static_cast<mfxU8>(min(255.0F, max(.0F, r)));
-                sycl_RGB[i * 3 + 1] = static_cast<mfxU8>(min(255.0F, max(.0F, g)));
-                sycl_RGB[i * 3 + 2] = static_cast<mfxU8>(min(255.0F, max(.0F, b)));
-            });
+            syclHandler.parallel_for<class ColorConversion>(
+                    sycl::range < 1 > (syclWidth * syclHeight), [=](sycl::id<1> i) {
+                        auto h = i / syclWidth;
+                        auto w = i % syclWidth;
+                        auto U_ptr = pitch * (h / 2) + (w / 2) * 2;
+                        auto Y = static_cast<float>(sycl_Y[pitch * h + w]);
+                        auto U = static_cast<float>(sycl_UV[U_ptr]);
+                        auto V = static_cast<float>(sycl_UV[U_ptr + 1]);
+                        auto r = 1.164F * (Y - 16.0F) + 1.596F * (V - 128.0F);
+                        auto g = 1.164F * (Y - 16.0F) - 0.391F * (U - 128.0F) - 0.813F * (V - 128.0F);
+                        auto b = 1.164F * (Y - 16.0F) + 2.018F * (U - 128.0F);
+                        sycl_RGB[i * 3 + 0] = static_cast<mfxU8>(min(255.0F, max(.0F, r)));
+                        sycl_RGB[i * 3 + 1] = static_cast<mfxU8>(min(255.0F, max(.0F, g)));
+                        sycl_RGB[i * 3 + 2] = static_cast<mfxU8>(min(255.0F, max(.0F, b)));
+                    });
         });
         syclQueue->wait();
     } catch (sycl::exception &exception) {
         cerr << exception.what() << endl;
         return {0, 0, nullptr};
     }
+    sycl::free(sycl_WidthHeight, *syclQueue);
     cout << "end color conversion in " << duration_cast<microseconds>((system_clock::now() - start_color_conv)).count()
          << "us" << endl;
 
@@ -334,3 +327,4 @@ decodeOutput decodeStream(decodeInput data_stream) {
     };
     return output;
 }
+//}
