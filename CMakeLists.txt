@@ -42,7 +42,7 @@ message("SYCL_FLAGS: ${SYCL_FLAGS}")
 
 link_directories($ENV{LD_LIBRARY_PATH})
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-link")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl /EHsc -fsycl-unnamed-lambda")
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=intel_gpu_acm_g10")

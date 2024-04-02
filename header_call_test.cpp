@@ -6,7 +6,7 @@ using namespace std;
 namespace fs = filesystem;
 
 int main(int argc, char *argv[]) {
-    fs::directory_entry pic_file(R"(C:\Users\tomokazu\aaa.jpg)");
+    fs::directory_entry pic_file(R"(C:\Users\tomokazu\friends-4385686.jpg)");
 
     cout << pic_file << endl;
 

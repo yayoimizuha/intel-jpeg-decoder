@@ -115,7 +115,8 @@ void check(mfxStatus x, int LINE) {
             break;
     }
     if (x < 0) {
-        exit(x);
+        cerr << x << endl;
+        runtime_error(to_string(x));
     }
 }
 
@@ -256,11 +257,11 @@ decodeOutput decodeStream(decodeInput data_stream) {
             break;
         default:
             MFXVideoDECODE_Close(*session);
-            check(status, 241);
+            check(status, 255);
     };
 
 
-    mfxFrameSurface1 *surface_out;
+    mfxFrameSurface1 *surface_out = nullptr;
     mfxSyncPoint syncPoint;
 
     auto start_jpeg_dec = system_clock::now();
